@@ -1,0 +1,34 @@
+project(opi-backend)
+cmake_minimum_required(VERSION 2.8)
+
+include( FindPkgConfig )
+pkg_check_modules ( LIBUTILS REQUIRED libutils>=1.0 )
+pkg_check_modules ( LIBJSONCPP REQUIRED libjsoncpp>=1.0 )
+
+set (OPIB_VERSION_MAJOR 1)
+set (OPIB_VERSION_MINOR 0)
+set (OPIB_APP_NAME "opi-backend")
+
+
+configure_file (
+	"${PROJECT_SOURCE_DIR}/Config.h.in"
+	"${PROJECT_BINARY_DIR}/Config.h"
+)
+
+include_directories("${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/src")
+
+add_subdirectory( src )
+
+aux_source_directory(. SRC_LIST)
+
+include_directories (
+		"${LIBJSONCPP_INCLUDE_DIRS}"
+	)
+
+add_definitions( -std=c++11 )
+add_executable(${PROJECT_NAME} ${SRC_LIST})
+
+target_link_libraries( ${PROJECT_NAME} -ljsoncpp ${LIBJSONCPP_LDFLAGS} ${LIBUTILS_LDFLAGS} )
+
+install( TARGETS opi-backend DESTINATION sbin )
+

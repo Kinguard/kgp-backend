@@ -1,0 +1,12 @@
+Source: opi-backend
+Section:admin
+Priority: optional
+Maintainer: Tor Krill <tor@openproducts.se>
+Build-Depends: debhelper (>= 8.0.0), cmake, libutils-dev, libjsoncpp-dev
+Standards-Version: 3.9.4
+Homepage: http://www.openproducts.com
+
+Package: opi-backend
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: OPI backend manages admin ops for OPI
