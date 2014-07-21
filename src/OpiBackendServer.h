@@ -10,6 +10,7 @@
 #include <libutils/NetServer.h>
 
 #include "Secop.h"
+#include "Config.h"
 
 using namespace Utils;
 using namespace Utils::Net;
@@ -26,9 +27,12 @@ public:
 private:
 	// Commands
 	void DoLogin(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	// Helper functions
+	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(const string& username);
+	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
 	void TouchCLient(const string& token);
 
 	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
@@ -42,7 +46,7 @@ private:
 	map<string,Action> actions;
 
 
-	string AddUser(const string& username);
+	string AddUser(const string& username, SecopPtr secop);
 	// <token, last access>
 	map<string, time_t> clientaccess;
 	// <token, pointer to secopconnection>

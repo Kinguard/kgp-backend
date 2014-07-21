@@ -1,6 +1,15 @@
 #include "OpiBackendServer.h"
 
 #include <libutils/Logger.h>
+#include <libutils/String.h>
+
+/*
+ * Bit patterns for argument checks
+ * (A bit uggly but effective)
+ */
+#define CHK_USR	0x01	// Check username
+#define CHK_PWD	0x02	// Check password
+#define CHK_DSP	0x04	// Check displayname
 
 // Convenience class for debug/trace
 class ScopedLog: public NoCopy
@@ -24,6 +33,9 @@ public:
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
 {
+	this->actions["login"]=&OpiBackendServer::DoLogin;
+	this->actions["createuser"]=&OpiBackendServer::DoCreateUser;
+
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -77,17 +89,10 @@ OpiBackendServer::~OpiBackendServer()
 
 void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
-	ScopedLog("DoLogin");
+	ScopedLog l("DoLogin");
 
-	if( !cmd.isMember("username") && !cmd["username"].isString() )
+	if( ! this->CheckArguments(client, CHK_USR|CHK_PWD, cmd) )
 	{
-		this->SendErrorMessage(client, cmd, 2, "Missing argument");
-		return;
-	}
-
-	if( !cmd.isMember("password") && !cmd["password"].isString() )
-	{
-		this->SendErrorMessage(client, cmd, 2, "Missing argument");
 		return;
 	}
 
@@ -96,7 +101,16 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 	if( this->CheckLoggedIn( username ))
 	{
-		SecopPtr secop = this->clients["username"];
+		logg << Logger::Debug << "User seems already logged in, validating anyway"<<lend;
+		SecopPtr secop = this->clients[this->users[ username ] ];
+
+		if( ! secop )
+		{
+			logg << Logger::Error << "Missing connection to secop"<<lend;
+			this->SendErrorMessage(client, cmd, 500, "Failed connecting to backing store");
+			return;
+		}
+
 		if( ! secop->PlainAuth(username, password)  )
 		{
 			this->SendErrorMessage(client, cmd, 400, "Failed");
@@ -110,7 +124,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		this->SendOK(client, cmd, ret);
 
 		// Update last access
-		this->TouchCLient( this->users[user]);
+		this->TouchCLient( this->users[username]);
 
 		return;
 	}
@@ -136,9 +150,64 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 }
 
+void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR|CHK_PWD|CHK_DSP, cmd) )
+	{
+		return;
+	}
+
+	string token =		cmd["token"].asString();
+	string user =		cmd["username"].asString();
+	string pass =		cmd["password"].asString();
+	string display =	cmd["displayname"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	if( ! secop->CreateUser( user, pass,display ) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Failed");
+		return;
+	}
+
+	Json::Value ret;
+	ret["id"] = 1;
+	this->SendOK(client, cmd, ret);
+}
+
 bool OpiBackendServer::CheckLoggedIn(const string &username)
 {
 	return this->users.find(username) != this->users.end();
+}
+
+bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
+{
+	if( !req.isMember("token") && !req["token"].isString() )
+	{
+		this->SendErrorMessage(client, req, 400, "Missing argument");
+		return false;
+	}
+
+	string token = req["token"].asString();
+
+	if( this->clientaccess.find( token ) == this->clientaccess.end() )
+	{
+		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		return false;
+	}
+
+	if( this->clientaccess[token]+SESSION_TIMEOUT  < time(nullptr) )
+	{
+		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		return false;
+	}
+
+	return true;
 }
 
 void OpiBackendServer::TouchCLient(const string &token)
@@ -207,10 +276,58 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 
 string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
 {
-	string token = "FakeToken";
+	//TODO: Perhaps something a bit more elaborate token?
+	string token = String::UUID();
 	this->users[username] = token;
-	this->client[token] = secop;
-	this->clientaccess = time(nullptr);
+	this->clients[token] = secop;
+	this->clientaccess[token] = time(nullptr);
 
 	return token;
 }
+
+
+// Local helper functions
+
+static inline bool
+CheckUsername(const Json::Value& cmd)
+{
+	return !cmd.isNull() &&	cmd.isMember("username") && cmd["username"].isString();
+}
+
+static inline bool
+CheckPassword(const Json::Value& cmd)
+{
+	return !cmd.isNull() &&	cmd.isMember("password") && cmd["password"].isString();
+}
+
+static inline bool
+CheckDisplayname(const Json::Value& cmd)
+{
+	return !cmd.isNull() &&	cmd.isMember("displayname") && cmd["displayname"].isString();
+}
+
+
+bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd)
+{
+	if( ( what & CHK_USR) && !CheckUsername(cmd) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return false;
+	}
+
+	if( ( what & CHK_PWD) && !CheckPassword(cmd) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return false;
+	}
+
+	if( ( what & CHK_DSP) && !CheckDisplayname(cmd) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return false;
+	}
+
+
+	return true;
+}
+

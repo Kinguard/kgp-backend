@@ -1,7 +1,13 @@
+#ifndef _OPI_CONFIG_H
+#define _OPI_CONFIG_H
 
 #define OPIB_VERSION_MAJOR @OPIB_VERSION_MAJOR@
 #define OPIB_VERSION_MINOR @OPIB_VERSION_MINOR@
 #define OPIB_APP_NAME "@OPIB_APP_NAME@"
 
+// Session timeout 30 Min
+#define SESSION_TIMEOUT	1800
+
 #define SOCKPATH	"/tmp/opib"
 
+#endif

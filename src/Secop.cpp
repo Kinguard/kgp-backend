@@ -64,13 +64,17 @@ bool Secop::PlainAuth(const string& user, const string& pwd)
 	return this->CheckReply(rep);
 }
 
-bool Secop::CreateUser(const string& user, const string& pwd)
+bool Secop::CreateUser(const string& user, const string& pwd, const string &display)
 {
 	Json::Value cmd(Json::objectValue);
 
 	cmd["cmd"]		= "createuser";
 	cmd["username"]	= user;
 	cmd["password"]	= pwd;
+	if( display != "")
+	{
+		cmd["displayname"] = display;
+	}
 
 	Json::Value rep = this->DoCall(cmd);
 
@@ -497,6 +501,8 @@ Json::Value Secop::DoCall(Json::Value& cmd)
 bool Secop::CheckReply( const Json::Value& val )
 {
 	bool ret = false;
+
+	logg << Logger::Debug << val.toStyledString() <<lend;
 
 	if( val.isMember("status") && val["status"].isObject() )
 	{

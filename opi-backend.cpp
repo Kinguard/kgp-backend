@@ -4,6 +4,19 @@
 
 int main(int argc, char** argv)
 {
+	logg.SetLevel(Logger::Debug);
 
-	return 0;
+	int ret;
+	try
+	{
+		OpiBackendApp app;
+
+		ret = app.Start( argc, argv);
+	}
+	catch(std::runtime_error& err)
+	{
+		logg << Logger::Error << "Caught runtime exception " << err.what() << lend;
+	}
+
+	return ret;
 }
