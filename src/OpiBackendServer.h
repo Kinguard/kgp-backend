@@ -28,12 +28,18 @@ private:
 	// Commands
 	void DoLogin(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoDeleteUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	// Helper functions
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(const string& username);
 	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
 	void TouchCLient(const string& token);
+
+	Json::Value GetUser(const string& token, const string& user);
 
 	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 

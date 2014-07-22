@@ -35,6 +35,10 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 {
 	this->actions["login"]=&OpiBackendServer::DoLogin;
 	this->actions["createuser"]=&OpiBackendServer::DoCreateUser;
+	this->actions["updateuser"]=&OpiBackendServer::DoUpdateUser;
+	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
+	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
+	this->actions["getusers"]=&OpiBackendServer::DoGetUsers;
 
 }
 
@@ -145,6 +149,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 		this->SendOK(client, cmd, ret);
 
+		this->TouchCLient( this->users[username]);
 	}
 
 
@@ -152,6 +157,8 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
+	ScopedLog l("Do Create user");
+
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
@@ -162,10 +169,13 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
+
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 	string pass =		cmd["password"].asString();
 	string display =	cmd["displayname"].asString();
+
+	this->TouchCLient( token );
 
 	SecopPtr secop = this->clients[token];
 
@@ -175,8 +185,118 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do Delete user");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+	{
+		return;
+	}
+
+	string token =		cmd["token"].asString();
+	string user =		cmd["username"].asString();
+
+	this->TouchCLient( token );
+
+	SecopPtr secop = this->clients[token];
+
+	if( ! secop->RemoveUser( user ) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do get user");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+	{
+		return;
+	}
+
+	string token =		cmd["token"].asString();
+	string user =		cmd["username"].asString();
+
+	this->TouchCLient( token );
+
+	Json::Value ret = this->GetUser(token, user);
+
+	this->SendOK(client, cmd,ret);
+}
+
+void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do update user");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR|CHK_DSP, cmd) )
+	{
+		return;
+	}
+
+
+	string token =		cmd["token"].asString();
+	string user =		cmd["username"].asString();
+	string disp =		cmd["displayname"].asString();
+
+	this->TouchCLient( token );
+
+	SecopPtr secop = this->clients[token];
+
+	if( ! secop->AddAttribute(user, "displayname", disp) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do get users");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =		cmd["token"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	vector<string> usernames = secop->GetUsers();
 	Json::Value ret;
-	ret["id"] = 1;
+	ret["users"]=Json::arrayValue;
+	for(auto user: usernames)
+	{
+		ret["users"].append( this->GetUser(token, user) );
+	}
+
 	this->SendOK(client, cmd, ret);
 }
 
@@ -216,6 +336,18 @@ void OpiBackendServer::TouchCLient(const string &token)
 	{
 		this->clientaccess[token]=time(nullptr);
 	}
+}
+
+Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
+{
+	SecopPtr secop = this->clients[token];
+
+	Json::Value ret;
+	ret["username"] = user;
+	ret["id"] = user;
+	ret["displayname"] = secop->GetAttribute(user,"displayname");
+
+	return ret;
 }
 
 void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, Json::Value &cmd)

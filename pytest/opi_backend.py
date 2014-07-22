@@ -51,3 +51,31 @@ class OPIBackend( Client ):
 		req["password"] = password
 		req["displayname"] = display
 		return self._dorequest(req, dump)
+
+	def updateuser(self, token, user, display, dump = defaultdump):
+		req = {}
+		req["cmd"] = "updateuser"
+		req["token"] = token
+		req["username"] = user
+		req["displayname"] = display
+		return self._dorequest(req, dump)
+
+	def getuser(self, token, user, dump = defaultdump):
+		req = {}
+		req["cmd"] = "getuser"
+		req["token"] = token
+		req["username"] = user
+		return self._dorequest(req, dump)
+
+	def getusers(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "getusers"
+		req["token"] = token
+		return self._dorequest(req, dump)
+
+	def deleteuser(self, token, user, dump = defaultdump):
+		req = {}
+		req["cmd"] = "deleteuser"
+		req["token"] = token
+		req["username"] = user
+		return self._dorequest(req, dump)

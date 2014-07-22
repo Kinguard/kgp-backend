@@ -113,6 +113,69 @@ vector<string> Secop::GetUsers()
 	return users;
 }
 
+bool Secop::AddAttribute(const string &user, const string &attr, const string &value)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "addattribute";
+	cmd["username"]	= user;
+	cmd["attribute"]= attr;
+	cmd["value"]= value;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
+bool Secop::RemoveAttribute(const string &user, const string &attr)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "addattribute";
+	cmd["username"]	= user;
+	cmd["attribute"]= attr;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
+vector<string> Secop::GetAttributes(const string &user)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "getattributes";
+	cmd["username"]	= user;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	vector<string> attrs;
+	if( this->CheckReply(rep) )
+	{
+		for(auto x: rep["attributes"])
+		{
+			attrs.push_back(x.asString() );
+		}
+	}
+	return attrs;
+}
+
+string Secop::GetAttribute(const string &user, const string &attr)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "getattribute";
+	cmd["username"]	= user;
+	cmd["attribute"] = attr;
+	Json::Value rep = this->DoCall(cmd);
+
+	string val;
+	if( this->CheckReply(rep) )
+	{
+		val = rep["attribute"].asString();
+	}
+	return val;
+}
 vector<string> Secop::GetServices(const string& user)
 {
 	Json::Value cmd(Json::objectValue);

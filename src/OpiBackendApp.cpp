@@ -20,7 +20,7 @@ OpiBackendApp::OpiBackendApp():DaemonApplication(OPIB_APP_NAME,"/var/run", "root
 
 void OpiBackendApp::Startup()
 {
-	logg << Logger::Debug << "Starting up"<<lend;
+	//logg << Logger::Debug << "Starting up"<<lend;
 
 	Utils::SigHandler::Instance().AddHandler(SIGTERM, std::bind(&OpiBackendApp::SigTerm, this, _1) );
 	Utils::SigHandler::Instance().AddHandler(SIGINT, std::bind(&OpiBackendApp::SigTerm, this, _1) );

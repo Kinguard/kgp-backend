@@ -42,6 +42,12 @@ public:
 	bool RemoveUser(const string& user);
 	vector<string> GetUsers();
 
+	bool AddAttribute(const string& user, const string& attr, const string& value);
+	bool RemoveAttribute(const string& user, const string& attr);
+	vector<string> GetAttributes(const string& user);
+	string GetAttribute(const string& user, const string& attr);
+
+
 	vector<string> GetServices(const string& user);
 	bool AddService(const string& user, const string& service);
 	bool RemoveService(const string& user, const string& service);
