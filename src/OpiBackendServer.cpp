@@ -34,11 +34,19 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
 {
 	this->actions["login"]=&OpiBackendServer::DoLogin;
+
 	this->actions["createuser"]=&OpiBackendServer::DoCreateUser;
 	this->actions["updateuser"]=&OpiBackendServer::DoUpdateUser;
 	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
 	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
 	this->actions["getusers"]=&OpiBackendServer::DoGetUsers;
+
+	this->actions["groupsget"]=&OpiBackendServer::DoGetGroups;
+	this->actions["groupadd"]=&OpiBackendServer::DoAddGroup;
+	this->actions["groupaddmember"]=&OpiBackendServer::DoAddGroupMember;
+	this->actions["groupgetmembers"]=&OpiBackendServer::DoGetGroupMembers;
+	this->actions["groupremove"]=&OpiBackendServer::DoRemoveGroup;
+	this->actions["groupremovemember"]=&OpiBackendServer::DoRemoveGroupMember;
 
 }
 
@@ -169,7 +177,6 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 	string pass =		cmd["password"].asString();
@@ -298,6 +305,164 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 	}
 
 	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do get groups");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	vector<string> groups = secop->GetGroups();
+
+	Json::Value ret;
+	ret["groups"]=Json::arrayValue;
+	for(auto group: groups)
+	{
+		ret["groups"].append( group );
+	}
+
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do add group");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+	string group =	cmd["group"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	if( !secop->AddGroup(group) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do add group member");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+	string group =	cmd["group"].asString();
+	string member =	cmd["member"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	if( !secop->AddGroupMember(group, member) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do add group member");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+	string group =	cmd["group"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	vector<string> members = secop->GetGroupMembers( group );
+
+	Json::Value ret;
+	ret["members"]=Json::arrayValue;
+
+	for( auto member: members)
+	{
+		ret["members"].append(member);
+	}
+
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do add group member");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+	string group =	cmd["group"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	if( !secop->RemoveGroup(group) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do group remove member");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string token =	cmd["token"].asString();
+	string group =	cmd["group"].asString();
+	string member =	cmd["member"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	this->TouchCLient( token );
+
+	if( !secop->RemoveGroupMember(group, member) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
 }
 
 bool OpiBackendServer::CheckLoggedIn(const string &username)

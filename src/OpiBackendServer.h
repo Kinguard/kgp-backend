@@ -27,11 +27,19 @@ public:
 private:
 	// Commands
 	void DoLogin(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+
 	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoDeleteUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+
+	void DoGetGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoAddGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoAddGroupMember(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetGroupMembers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoRemoveGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoRemoveGroupMember(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	// Helper functions
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);

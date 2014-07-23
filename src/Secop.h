@@ -65,6 +65,14 @@ public:
 
 	list<map<string,string>> GetIdentifiers(const string& user, const string& service);
 
+	// Group commands
+	bool AddGroup(const string& group);
+	bool AddGroupMember(const string& group, const string& member);
+	vector<string> GetGroupMembers(const string& group);
+	vector<string> GetGroups();
+	bool RemoveGroup(const string& group);
+	bool RemoveGroupMember(const string& group, const string& member);
+
 	// Appid / system commands
 	bool AppAddID(const string& appid);
 	vector<string> AppGetIDs();

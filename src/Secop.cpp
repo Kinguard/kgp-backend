@@ -358,6 +358,97 @@ list<map<string,string>> Secop::GetIdentifiers(const string& user, const string&
 	return ret;
 }
 
+bool Secop::AddGroup(const string &group)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]	= "groupadd";
+	cmd["group"]= group;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
+bool Secop::AddGroupMember(const string &group, const string &member)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]	= "groupaddmember";
+	cmd["group"]= group;
+	cmd["member"]= member;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+
+}
+
+vector<string> Secop::GetGroupMembers(const string &group)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]	= "groupgetmembers";
+	cmd["group"]= group;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	vector<string> ret;
+	if( this->CheckReply(rep) )
+	{
+		for( auto member: rep["members"])
+		{
+			ret.push_back( member.asString() );
+		}
+	}
+
+	return ret;
+}
+
+vector<string> Secop::GetGroups()
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]			= "groupsget";
+
+	Json::Value rep = this->DoCall(cmd);
+
+	vector<string> ret;
+	if ( this->CheckReply(rep) )
+	{
+		for(auto group: rep["groups"])
+		{
+			ret.push_back( group.asString() );
+		}
+	}
+	return ret;
+}
+
+bool Secop::RemoveGroup(const string &group)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "groupremove";
+	cmd["group"]	= group;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
+bool Secop::RemoveGroupMember(const string &group, const string &member)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "groupremovemember";
+	cmd["group"]	= group;
+	cmd["member"]	= member;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
 bool Secop::AppAddID(const string &appid)
 {
 	Json::Value cmd(Json::objectValue);
