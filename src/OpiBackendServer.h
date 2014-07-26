@@ -33,6 +33,7 @@ private:
 	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoUpdateUserPassword(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	void DoGetGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoAddGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
@@ -59,6 +60,8 @@ private:
 	typedef void (OpiBackendServer::*Action)(UnixStreamClientSocketPtr&, Json::Value&);
 	map<string,Action> actions;
 
+	inline string UserFromToken( const string& token);
+	inline const string& TokenFromUser( const string& user);
 
 	string AddUser(const string& username, SecopPtr secop);
 	// <token, last access>

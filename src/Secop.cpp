@@ -6,6 +6,18 @@
 
 using namespace Utils;
 
+inline void throw_error(const Json::Value& rep)
+{
+	if( rep.isMember("status") && rep["status"].isMember("desc") && rep["status"]["desc"].isString() )
+	{
+		throw std::runtime_error(rep["status"]["desc"].asString());
+	}
+	else
+	{
+		throw std::runtime_error("Internal error");
+	}
+}
+
 Secop::Secop(): tid(0), secop("/tmp/secop")
 {
 
@@ -31,11 +43,12 @@ Secop::State Secop::Status()
 
 	Json::Value rep = this->DoCall(cmd);
 
-	if( this->CheckReply(rep) )
+	if( ! this->CheckReply(rep) )
 	{
-		return static_cast<Secop::State>(rep["server"]["state"].asInt());
+		throw_error(rep);
 	}
-	return Secop::Unknown;
+
+	return static_cast<Secop::State>(rep["server"]["state"].asInt());
 }
 
 bool Secop::SockAuth()
@@ -81,6 +94,19 @@ bool Secop::CreateUser(const string& user, const string& pwd, const string &disp
 	return this->CheckReply(rep);
 }
 
+bool Secop::UpdateUserPassword(const string &user, const string &pwd)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "updateuserpassword";
+	cmd["username"]	= user;
+	cmd["password"]	= pwd;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	return this->CheckReply(rep);
+}
+
 bool Secop::RemoveUser(const string& user)
 {
 	Json::Value cmd(Json::objectValue);
@@ -109,6 +135,10 @@ vector<string> Secop::GetUsers()
 		{
 			users.push_back(x.asString() );
 		}
+	}
+	else
+	{
+		throw_error(rep);
 	}
 	return users;
 }
@@ -157,6 +187,10 @@ vector<string> Secop::GetAttributes(const string &user)
 			attrs.push_back(x.asString() );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 	return attrs;
 }
 
@@ -169,12 +203,12 @@ string Secop::GetAttribute(const string &user, const string &attr)
 	cmd["attribute"] = attr;
 	Json::Value rep = this->DoCall(cmd);
 
-	string val;
-	if( this->CheckReply(rep) )
+	if( ! this->CheckReply(rep) )
 	{
-		val = rep["attribute"].asString();
+		throw_error(rep);
 	}
-	return val;
+
+	return rep["attribute"].asString();
 }
 vector<string> Secop::GetServices(const string& user)
 {
@@ -192,6 +226,10 @@ vector<string> Secop::GetServices(const string& user)
 		{
 			services.push_back(x.asString() );
 		}
+	}
+	else
+	{
+		throw_error(rep);
 	}
 	return services;
 }
@@ -240,6 +278,10 @@ vector<string> Secop::GetACL(const string& user, const string& service)
 			acl.push_back(x.asString() );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 	return acl;
 }
 
@@ -286,6 +328,10 @@ bool Secop::HasACL(const string& user, const string& service, const string& acl)
 	if ( this->CheckReply(rep) )
 	{
 		ret = rep["hasacl"].asBool();
+	}
+	else
+	{
+		throw_error(rep);
 	}
 
 	return ret;
@@ -354,6 +400,10 @@ list<map<string,string>> Secop::GetIdentifiers(const string& user, const string&
 			ret.push_back( id );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 
 	return ret;
 }
@@ -401,6 +451,10 @@ vector<string> Secop::GetGroupMembers(const string &group)
 			ret.push_back( member.asString() );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 
 	return ret;
 }
@@ -420,6 +474,10 @@ vector<string> Secop::GetGroups()
 		{
 			ret.push_back( group.asString() );
 		}
+	}
+	else
+	{
+		throw_error(rep);
 	}
 	return ret;
 }
@@ -476,6 +534,10 @@ vector<string> Secop::AppGetIDs()
 		{
 			users.push_back(x.asString() );
 		}
+	}
+	else
+	{
+		throw_error(rep);
 	}
 	return users;
 
@@ -534,6 +596,10 @@ list<map<string, string> > Secop::AppGetIdentifiers(const string &appid)
 			ret.push_back( id );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 
 	return ret;
 }
@@ -585,6 +651,10 @@ vector<string> Secop::AppGetACL(const string &appid)
 			acl.push_back(x.asString() );
 		}
 	}
+	else
+	{
+		throw_error(rep);
+	}
 	return acl;
 
 }
@@ -616,6 +686,10 @@ bool Secop::AppHasACL(const string &appid, const string &acl)
 	if ( this->CheckReply(rep) )
 	{
 		ret = rep["hasacl"].asBool();
+	}
+	else
+	{
+		throw_error(rep);
 	}
 
 	return ret;
@@ -656,7 +730,7 @@ bool Secop::CheckReply( const Json::Value& val )
 {
 	bool ret = false;
 
-	logg << Logger::Debug << val.toStyledString() <<lend;
+	//logg << Logger::Debug << val.toStyledString() <<lend;
 
 	if( val.isMember("status") && val["status"].isObject() )
 	{

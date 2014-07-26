@@ -39,6 +39,7 @@ public:
 
 	// User commands
 	bool CreateUser(const string& user, const string& pwd, const string& display="");
+	bool UpdateUserPassword(const string& user, const string& pwd);
 	bool RemoveUser(const string& user);
 	vector<string> GetUsers();
 

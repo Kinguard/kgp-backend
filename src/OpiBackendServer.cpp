@@ -3,6 +3,8 @@
 #include <libutils/Logger.h>
 #include <libutils/String.h>
 
+#include <algorithm>
+
 /*
  * Bit patterns for argument checks
  * (A bit uggly but effective)
@@ -10,6 +12,7 @@
 #define CHK_USR	0x01	// Check username
 #define CHK_PWD	0x02	// Check password
 #define CHK_DSP	0x04	// Check displayname
+#define CHK_NPW 0x08	// Check new password
 
 // Convenience class for debug/trace
 class ScopedLog: public NoCopy
@@ -36,6 +39,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["login"]=&OpiBackendServer::DoLogin;
 
 	this->actions["createuser"]=&OpiBackendServer::DoCreateUser;
+	this->actions["updateuserpassword"]=&OpiBackendServer::DoUpdateUserPassword;
 	this->actions["updateuser"]=&OpiBackendServer::DoUpdateUser;
 	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
 	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
@@ -244,6 +248,16 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 
 	this->TouchCLient( token );
 
+	SecopPtr secop = this->clients[token];
+
+	vector<string> users  = secop->GetUsers();
+
+	if( std::find(users.begin(), users.end(), user) == users.end() )
+	{
+		this->SendErrorMessage(client, cmd, 404, "User not found");
+		return;
+	}
+
 	Json::Value ret = this->GetUser(token, user);
 
 	this->SendOK(client, cmd,ret);
@@ -305,6 +319,66 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 	}
 
 	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do update password");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR|CHK_PWD|CHK_NPW, cmd) )
+	{
+		return;
+	}
+
+	string token =		cmd["token"].asString();
+	string user =		cmd["username"].asString();
+	string passw =		cmd["password"].asString();
+	string newps =		cmd["newpassword"].asString();
+
+	SecopPtr secop = this->clients[token];
+
+	list<map<string,string>>  ids = secop->GetIdentifiers( user, "opiuser");
+	if(ids.size() == 0 )
+	{
+		this->SendErrorMessage(client, cmd, 500, "Database error");
+		return;
+	}
+
+	map<string,string> id = ids.front();
+	if( id.find("password") == id.end() )
+	{
+		this->SendErrorMessage(client, cmd, 500, "Database error");
+		return;
+	}
+
+	/*
+	 *If user tries to change own password we want to verify that
+	 * they know old password.
+	 * Else we rely on secop catching unauthorized updates
+	 */
+
+	if( user == this->UserFromToken( token ) )
+	{
+		if( passw != id["password"] )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Bad request");
+			return;
+
+		}
+	}
+
+	if( ! secop->UpdateUserPassword(user, newps) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -510,7 +584,15 @@ Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
 	Json::Value ret;
 	ret["username"] = user;
 	ret["id"] = user;
-	ret["displayname"] = secop->GetAttribute(user,"displayname");
+	try
+	{
+		ret["displayname"] = secop->GetAttribute(user,"displayname");
+	}
+	catch( std::runtime_error err)
+	{
+		// No error if displayname missing
+		ret["displayname"] ="";
+	}
 
 	return ret;
 }
@@ -526,7 +608,7 @@ void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, Json
 		}
 		catch( std::runtime_error& err)
 		{
-			logg << Logger::Error << "Failed to execute command "<< action << ": "<<err.what()<<lend;
+			logg << Logger::Error << "Failed to execute command "<< action << " : "<<err.what()<<lend;
 			this->SendErrorMessage(client, cmd, 4, "Internal error");
 		}
 	}
@@ -571,6 +653,18 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 	this->SendReply(client, ret);
 }
 
+string OpiBackendServer::UserFromToken(const string &token)
+{
+	for( auto usertoken: this->users)
+	{
+		if( usertoken.second == token )
+		{
+			return usertoken.first;
+		}
+	}
+	return "";
+}
+
 string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
 {
 	//TODO: Perhaps something a bit more elaborate token?
@@ -598,6 +692,12 @@ CheckPassword(const Json::Value& cmd)
 }
 
 static inline bool
+CheckNewPassword(const Json::Value& cmd)
+{
+	return !cmd.isNull() &&	cmd.isMember("newpassword") && cmd["newpassword"].isString();
+}
+
+static inline bool
 CheckDisplayname(const Json::Value& cmd)
 {
 	return !cmd.isNull() &&	cmd.isMember("displayname") && cmd["displayname"].isString();
@@ -613,6 +713,12 @@ bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int wha
 	}
 
 	if( ( what & CHK_PWD) && !CheckPassword(cmd) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return false;
+	}
+
+	if( ( what & CHK_NPW) && !CheckNewPassword(cmd) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Missing argument");
 		return false;

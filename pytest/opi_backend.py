@@ -52,6 +52,16 @@ class OPIBackend( Client ):
 		req["displayname"] = display
 		return self._dorequest(req, dump)
 
+
+	def updateuserpassword(self, token, user, password, newpass, dump = defaultdump):
+		req = {}
+		req["cmd"] = "updateuserpassword"
+		req["token"] = token
+		req["username"] = user
+		req["password"] = password
+		req["newpassword"] = newpass
+		return self._dorequest(req, dump)
+
 	def updateuser(self, token, user, display, dump = defaultdump):
 		req = {}
 		req["cmd"] = "updateuser"
