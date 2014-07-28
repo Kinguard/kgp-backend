@@ -27,6 +27,7 @@ public:
 private:
 	// Commands
 	void DoLogin(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoAuthenticate(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoDeleteUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);

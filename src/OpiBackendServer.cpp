@@ -37,6 +37,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
 {
 	this->actions["login"]=&OpiBackendServer::DoLogin;
+	this->actions["authenticate"]=&OpiBackendServer::DoAuthenticate;
 
 	this->actions["createuser"]=&OpiBackendServer::DoCreateUser;
 	this->actions["updateuserpassword"]=&OpiBackendServer::DoUpdateUserPassword;
@@ -165,6 +166,31 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 	}
 
 
+}
+
+void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do Authenticate");
+
+	// TODO: Should one have to be logged in to do this?
+
+	if( ! this->CheckArguments(client, CHK_USR|CHK_PWD, cmd) )
+	{
+		return;
+	}
+
+	string username = cmd["username"].asString();
+	string password = cmd["password"].asString();
+
+	// We do this on a new temporary connection
+	SecopPtr secop(new Secop() );
+	if( ! secop->PlainAuth(username,password) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
