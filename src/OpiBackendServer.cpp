@@ -411,6 +411,7 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 {
 	ScopedLog l("Do get groups");
 
+	/*
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
@@ -421,6 +422,10 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 	SecopPtr secop = this->clients[token];
 
 	this->TouchCLient( token );
+*/
+
+	SecopPtr secop = SecopPtr( new Secop() );
+	secop->SockAuth();
 
 	vector<string> groups = secop->GetGroups();
 
