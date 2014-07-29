@@ -1,3 +1,9 @@
+opi-backend (0.3.1) testing; urgency=low
+
+  * Add secop dependency on package
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 29 Jul 2014 09:04:09 +0200
+
 opi-backend (0.3) testing; urgency=low
 
   * Let anyone read groups to allow OC do so before login

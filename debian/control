@@ -8,5 +8,5 @@ Homepage: http://www.openproducts.com
 
 Package: opi-backend
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, secop
 Description: OPI backend manages admin ops for OPI
