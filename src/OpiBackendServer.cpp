@@ -53,6 +53,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["groupremove"]=&OpiBackendServer::DoRemoveGroup;
 	this->actions["groupremovemember"]=&OpiBackendServer::DoRemoveGroupMember;
 
+	this->actions["shutdown"]=&OpiBackendServer::DoShutdown;
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -564,6 +565,34 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	if( !secop->RemoveGroupMember(group, member) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do shutdown");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string action =	cmd["action"].asString();
+
+	if( action == "shutdown")
+	{
+		system("/sbin/poweroff");
+	}
+	else if( action == "reboot" )
+	{
+		system("/sbin/reboot");
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 400, "Bad request");
 		return;
 	}
 

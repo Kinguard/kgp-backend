@@ -43,6 +43,8 @@ private:
 	void DoRemoveGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoRemoveGroupMember(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
+	void DoShutdown(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+
 	// Helper functions
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(const string& username);

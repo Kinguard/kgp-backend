@@ -1,3 +1,9 @@
+opi-backend (0.4) testing; urgency=low
+
+  * Added shutdown function
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 31 Jul 2014 16:09:33 +0200
+
 opi-backend (0.3.1) testing; urgency=low
 
   * Add secop dependency on package
