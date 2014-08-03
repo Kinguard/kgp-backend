@@ -10,4 +10,11 @@
 
 #define SOCKPATH	"/tmp/opib"
 
+#define UPDATE_CONFIG "/etc/opi/opi-update.conf"
+
+#define BACKUP_CONFIG "/etc/opi/backup_target.conf"
+#define BACKUP_ALERT "/var/log/opi-backup/alert"
+#define BACKUP_ERRORS "/var/log/opi-backup/errors"
+#define BACKUP_COMPLETE "/var/log/opi-backup/complete"
+#define BACKUP_GET_QUOTA "/usr/share/opi-backup/get_quota.py"
 #endif

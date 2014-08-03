@@ -2,6 +2,8 @@
 
 #include <libutils/Logger.h>
 #include <libutils/String.h>
+#include <libutils/FileUtils.h>
+#include <libutils/ConfigFile.h>
 
 #include <algorithm>
 
@@ -54,6 +56,15 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["groupremovemember"]=&OpiBackendServer::DoRemoveGroupMember;
 
 	this->actions["shutdown"]=&OpiBackendServer::DoShutdown;
+
+	this->actions["update_getstate"]=&OpiBackendServer::DoUpdate_getstate;
+	this->actions["update_setstate"]=&OpiBackendServer::DoUpdate_setstate;
+
+	this->actions["backup_getsettings"]=&OpiBackendServer::DoBackup_getSettings;
+	this->actions["backup_setsettings"]=&OpiBackendServer::DoBackup_setSettings;
+	this->actions["backup_getQuota"]=&OpiBackendServer::DoBackup_getQuota;
+	this->actions["backup_getstatus"]=&OpiBackendServer::DoBackup_getStatus;
+
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -599,6 +610,193 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	this->SendOK(client, cmd);
 }
 
+void OpiBackendServer::DoUpdate_getstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Get update state");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( File::FileExists(UPDATE_CONFIG))
+	{
+		ConfigFile c(UPDATE_CONFIG);
+		res["update"] = c.ValueOrDefault("update");
+		this->SendOK(client, cmd, res);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 400, "No config file present");
+	}
+}
+
+void OpiBackendServer::DoUpdate_setstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Set update state");
+	string doupdates = cmd["state"].asString();
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string path = File::GetPath( UPDATE_CONFIG );
+
+	if( ! File::DirExists( path ) )
+	{
+		File::MkPath( path, 0755 );
+	}
+
+	ConfigFile c( UPDATE_CONFIG );
+	if(doupdates == "1")
+	{
+		c["update"] = "yes";
+	}
+	else
+	{
+		c["update"] = "no";
+	}
+
+	c.Sync(true, 0644);
+	this->SendOK(client, cmd);
+
+}
+
+void OpiBackendServer::DoBackup_getSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	Json::Value res(Json::objectValue);
+	string backend;
+	string type;
+
+	ScopedLog l("Get backup settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( File::FileExists(BACKUP_CONFIG))
+	{
+		ConfigFile c(BACKUP_CONFIG);
+		backend = c.ValueOrDefault("backend");
+		if(backend == "s3op://")
+		{
+			res["enabled"] = true;
+			res["location"] = "remote";
+		}
+		else if (backend == "local://")
+		{
+			res["enabled"] = true;
+			res["location"] = "local";
+		}
+		else
+		{
+			res["enabled"] = false;
+			res["location"] = "remote";  // Show as default target in UI
+		}
+		res["type"] = c.ValueOrDefault("type");
+
+		this->SendOK(client, cmd, res);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 400, "No config file present");
+	}
+}
+
+void OpiBackendServer::DoBackup_setSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Set backup settings");
+	string type = cmd["type"].asString();
+	string backend = cmd["location"].asString();
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	string path = File::GetPath( BACKUP_CONFIG );
+
+	if( ! File::DirExists( path ) )
+	{
+		File::MkPath( path, 0755 );
+	}
+
+	ConfigFile c( BACKUP_CONFIG );
+	if(backend == "local")
+	{
+		c["backend"] = "local://";
+	}
+	else if (backend == "remote")
+	{
+		c["backend"] = "s3op://";
+	}
+	else
+	{
+		c["backend"] = "none";
+	}
+
+	c["type"] = type;
+
+	c.Sync(true, 0644);
+	this->SendOK(client, cmd);
+
+}
+
+void OpiBackendServer::DoBackup_getQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Get Quota");
+
+	string jsonMessage;
+	Json::Reader reader;
+	Json::Value parsedFromString;
+	bool parsingSuccessful;
+
+	jsonMessage = ExecCmd((char*) BACKUP_GET_QUOTA );
+	parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
+	this->SendOK(client, cmd, parsedFromString);
+
+}
+
+void OpiBackendServer::DoBackup_getStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Get Backup Status");
+	Json::Value res(Json::objectValue);
+	struct stat filestatus;
+
+	if( File::FileExists( BACKUP_ALERT ))
+	{
+		res["backup_status"] = "Failed";
+		res["info"] = File::GetContentAsString( BACKUP_ALERT ,true );
+		if( File::DirExists( BACKUP_ERRORS ))
+		{
+			stat( BACKUP_ERRORS , &filestatus );
+			res["date"] = to_string(filestatus.st_mtime);
+		}
+	}
+	else
+	{
+		res["backup_status"] = "Successful";
+		res["info"] = "";
+		if( File::DirExists( BACKUP_COMPLETE ))
+		{
+			stat( BACKUP_COMPLETE , &filestatus );
+			res["date"] = to_string(filestatus.st_mtime);
+		}
+	}
+
+	this->SendOK(client, cmd, res);
+
+}
+
+
 bool OpiBackendServer::CheckLoggedIn(const string &username)
 {
 	return this->users.find(username) != this->users.end();
@@ -736,8 +934,22 @@ string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
 	return token;
 }
 
-
 // Local helper functions
+
+string OpiBackendServer::ExecCmd(char* cmd)
+{
+	FILE* pipe = popen(cmd, "r");
+	if (!pipe) return "ERROR";
+	char buffer[128];
+	std::string result = "";
+	while(!feof(pipe))
+	{
+		if(fgets(buffer, 128, pipe) != NULL)
+			result += buffer;
+	}
+	pclose(pipe);
+	return result;
+}
 
 static inline bool
 CheckUsername(const Json::Value& cmd)

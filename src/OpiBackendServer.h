@@ -6,6 +6,8 @@
 #include <map>
 
 #include <json/json.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <libutils/NetServer.h>
 
@@ -45,7 +47,17 @@ private:
 
 	void DoShutdown(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
+	void DoUpdate_getstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoUpdate_setstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
+	void DoBackup_getSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackup_setSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackup_getQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackup_getStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 	// Helper functions
+	string ExecCmd(char* $cmd);
+
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(const string& username);
 	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
