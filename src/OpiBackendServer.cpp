@@ -790,6 +790,10 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 			stat( BACKUP_COMPLETE , &filestatus );
 			res["date"] = to_string(filestatus.st_mtime);
 		}
+		else
+		{
+			res["date"] = "";
+		}
 	}
 
 	this->SendOK(client, cmd, res);
