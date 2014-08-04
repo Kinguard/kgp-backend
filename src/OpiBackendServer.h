@@ -47,13 +47,13 @@ private:
 
 	void DoShutdown(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
-	void DoUpdate_getstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoUpdate_setstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
-	void DoBackup_getSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackup_setSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackup_getQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackup_getStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
 	string ExecCmd(char* $cmd);

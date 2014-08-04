@@ -57,13 +57,13 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 
 	this->actions["shutdown"]=&OpiBackendServer::DoShutdown;
 
-	this->actions["update_getstate"]=&OpiBackendServer::DoUpdate_getstate;
-	this->actions["update_setstate"]=&OpiBackendServer::DoUpdate_setstate;
+	this->actions["updategetstate"]=&OpiBackendServer::DoUpdateGetstate;
+	this->actions["updatesetstate"]=&OpiBackendServer::DoUpdateSetstate;
 
-	this->actions["backup_getsettings"]=&OpiBackendServer::DoBackup_getSettings;
-	this->actions["backup_setsettings"]=&OpiBackendServer::DoBackup_setSettings;
-	this->actions["backup_getQuota"]=&OpiBackendServer::DoBackup_getQuota;
-	this->actions["backup_getstatus"]=&OpiBackendServer::DoBackup_getStatus;
+	this->actions["backupgetsettings"]=&OpiBackendServer::DoBackupGetSettings;
+	this->actions["backupsetsettings"]=&OpiBackendServer::DoBackupSetSettings;
+	this->actions["backupgetQuota"]=&OpiBackendServer::DoBackupGetQuota;
+	this->actions["backupgetstatus"]=&OpiBackendServer::DoBackupGetStatus;
 
 }
 
@@ -610,7 +610,7 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoUpdate_getstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
 
@@ -633,7 +633,7 @@ void OpiBackendServer::DoUpdate_getstate(UnixStreamClientSocketPtr &client, Json
 	}
 }
 
-void OpiBackendServer::DoUpdate_setstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
 
@@ -667,7 +667,7 @@ void OpiBackendServer::DoUpdate_setstate(UnixStreamClientSocketPtr &client, Json
 
 }
 
-void OpiBackendServer::DoBackup_getSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
 	string backend;
@@ -709,7 +709,7 @@ void OpiBackendServer::DoBackup_getSettings(UnixStreamClientSocketPtr &client, J
 	}
 }
 
-void OpiBackendServer::DoBackup_setSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
 
@@ -750,7 +750,7 @@ void OpiBackendServer::DoBackup_setSettings(UnixStreamClientSocketPtr &client, J
 
 }
 
-void OpiBackendServer::DoBackup_getQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Get Quota");
 
@@ -765,7 +765,7 @@ void OpiBackendServer::DoBackup_getQuota(UnixStreamClientSocketPtr &client, Json
 
 }
 
-void OpiBackendServer::DoBackup_getStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Get Backup Status");
 	Json::Value res(Json::objectValue);
