@@ -1,3 +1,11 @@
+opi-backend (0.5) vili; urgency=low
+
+  * Add support for update settings
+  * Add support for backup settings
+  * Fix some minor bugs.
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 04 Aug 2014 16:44:17 +0200
+
 opi-backend (0.4) testing; urgency=low
 
   * Added shutdown function
