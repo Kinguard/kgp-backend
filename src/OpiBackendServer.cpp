@@ -504,7 +504,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 
 void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
-	ScopedLog l("Do add group member");
+	ScopedLog l("Do get group members");
 
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
@@ -533,7 +533,7 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 
 void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
-	ScopedLog l("Do add group member");
+	ScopedLog l("Do remove group");
 
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
