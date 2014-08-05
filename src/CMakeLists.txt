@@ -1,6 +1,7 @@
 set( applib_src
 	OpiBackendApp.cpp
 	OpiBackendServer.cpp
+	MailConfig.cpp
 	Secop.cpp
 	)
 

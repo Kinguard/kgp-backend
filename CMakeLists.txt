@@ -9,6 +9,8 @@ set (OPIB_VERSION_MAJOR 1)
 set (OPIB_VERSION_MINOR 0)
 set (OPIB_APP_NAME "opi-backend")
 
+set (APP_PATH "${PROJECT_BINARY_DIR}")
+set (SRC_PATH "${PROJECT_SOURCE_DIR}")
 
 configure_file (
 	"${PROJECT_SOURCE_DIR}/Config.h.in"
@@ -18,6 +20,7 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/src")
 
 add_subdirectory( src )
+add_subdirectory( test )
 
 aux_source_directory(. SRC_LIST)
 
@@ -29,6 +32,9 @@ add_definitions( -std=c++11 )
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
 target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBJSONCPP_LDFLAGS} ${LIBUTILS_LDFLAGS} )
+
+enable_testing()
+add_test( NAME TestApp COMMAND testapp )
 
 install( TARGETS opi-backend DESTINATION sbin )
 
