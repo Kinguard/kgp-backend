@@ -5,9 +5,19 @@
 #define OPIB_VERSION_MINOR @OPIB_VERSION_MINOR@
 #define OPIB_APP_NAME "@OPIB_APP_NAME@"
 
+#cmakedefine APP_BUILD_PACKAGE
+#cmakedefine APP_BUILD_LOCAL
+
 // Mail handling
-#define DOMAINFILE      "domains"
-#define ALIASES         "vmailbox"
+#ifdef APP_BUILD_LOCAL
+	#define DOMAINFILE      "domains"
+	#define ALIASES         "vmailbox"
+#endif
+
+#ifdef APP_BUILD_PACKAGE
+	#define DOMAINFILE      "/var/opi/mail/conf/domains"
+	#define ALIASES         "/var/opi/mail/conf/vmailbox"
+#endif
 
 // For unittests
 #define APP_PATH "@APP_PATH@"
@@ -25,4 +35,5 @@
 #define BACKUP_ERRORS "/var/log/opi-backup/errors"
 #define BACKUP_COMPLETE "/var/log/opi-backup/complete"
 #define BACKUP_GET_QUOTA "/usr/share/opi-backup/get_quota.py"
+
 #endif

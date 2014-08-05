@@ -55,6 +55,8 @@ private:
 	void DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
+	void DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 	// Helper functions
 	string ExecCmd(char* $cmd);
 

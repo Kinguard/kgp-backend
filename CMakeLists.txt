@@ -12,6 +12,12 @@ set (OPIB_APP_NAME "opi-backend")
 set (APP_PATH "${PROJECT_BINARY_DIR}")
 set (SRC_PATH "${PROJECT_SOURCE_DIR}")
 
+if(APP_BUILD MATCHES deb)
+		set ( APP_BUILD_PACKAGE 1 )
+else()
+		set ( APP_BUILD_LOCAL 1 )
+endif()
+
 configure_file (
 	"${PROJECT_SOURCE_DIR}/Config.h.in"
 	"${PROJECT_BINARY_DIR}/Config.h"

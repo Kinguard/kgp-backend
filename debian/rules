@@ -12,5 +12,9 @@
 #override_dh_installinit:
 #	dh_installinit -- stop 20 0 1 6 .
 
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DAPP_BUILD=deb
+
 %:
 	dh $@ 

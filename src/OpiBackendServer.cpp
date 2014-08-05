@@ -1,4 +1,5 @@
 #include "OpiBackendServer.h"
+#include "MailConfig.h"
 
 #include <libutils/Logger.h>
 #include <libutils/String.h>
@@ -65,6 +66,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["backupgetQuota"]=&OpiBackendServer::DoBackupGetQuota;
 	this->actions["backupgetstatus"]=&OpiBackendServer::DoBackupGetStatus;
 
+	this->actions["smtpgetdomains"]=&OpiBackendServer::DoSmtpGetDomains;
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -224,8 +226,6 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string pass =		cmd["password"].asString();
 	string display =	cmd["displayname"].asString();
 
-	this->TouchCLient( token );
-
 	SecopPtr secop = this->clients[token];
 
 	if( ! secop->CreateUser( user, pass,display ) )
@@ -254,8 +254,6 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
-	this->TouchCLient( token );
-
 	SecopPtr secop = this->clients[token];
 
 	if( ! secop->RemoveUser( user ) )
@@ -283,8 +281,6 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
-
-	this->TouchCLient( token );
 
 	SecopPtr secop = this->clients[token];
 
@@ -315,12 +311,9 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 	string disp =		cmd["displayname"].asString();
-
-	this->TouchCLient( token );
 
 	SecopPtr secop = this->clients[token];
 
@@ -345,8 +338,6 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 	string token =		cmd["token"].asString();
 
 	SecopPtr secop = this->clients[token];
-
-	this->TouchCLient( token );
 
 	vector<string> usernames = secop->GetUsers();
 	Json::Value ret;
@@ -433,7 +424,6 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 
 	SecopPtr secop = this->clients[token];
 
-	this->TouchCLient( token );
 */
 
 	SecopPtr secop = SecopPtr( new Secop() );
@@ -465,8 +455,6 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 
 	SecopPtr secop = this->clients[token];
 
-	this->TouchCLient( token );
-
 	if( !secop->AddGroup(group) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
@@ -491,8 +479,6 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 
 	SecopPtr secop = this->clients[token];
 
-	this->TouchCLient( token );
-
 	if( !secop->AddGroupMember(group, member) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
@@ -515,8 +501,6 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	string group =	cmd["group"].asString();
 
 	SecopPtr secop = this->clients[token];
-
-	this->TouchCLient( token );
 
 	vector<string> members = secop->GetGroupMembers( group );
 
@@ -545,8 +529,6 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 
 	SecopPtr secop = this->clients[token];
 
-	this->TouchCLient( token );
-
 	if( !secop->RemoveGroup(group) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
@@ -570,8 +552,6 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	string member =	cmd["member"].asString();
 
 	SecopPtr secop = this->clients[token];
-
-	this->TouchCLient( token );
 
 	if( !secop->RemoveGroupMember(group, member) )
 	{
@@ -754,6 +734,11 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Get Quota");
 
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
 	string jsonMessage;
 	Json::Reader reader;
 	Json::Value parsedFromString;
@@ -762,12 +747,17 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 	jsonMessage = ExecCmd((char*) BACKUP_GET_QUOTA );
 	parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
 	this->SendOK(client, cmd, parsedFromString);
-
 }
 
 void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Get Backup Status");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
 	Json::Value res(Json::objectValue);
 	struct stat filestatus;
 
@@ -800,6 +790,29 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 
 }
 
+void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp get domains");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	MailConfig mc;
+
+	list<string> domains = mc.GetDomains();
+
+	Json::Value res(Json::objectValue);
+	res["domains"]=Json::arrayValue;
+	for( auto domain: domains )
+	{
+		res["domains"].append(domain);
+	}
+
+	this->SendOK(client, cmd, res);
+}
+
 
 bool OpiBackendServer::CheckLoggedIn(const string &username)
 {
@@ -827,6 +840,8 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 		this->SendErrorMessage(client, req, 401, "Unauthorized");
 		return false;
 	}
+
+	this->TouchCLient( token );
 
 	return true;
 }
