@@ -16,5 +16,7 @@
 override_dh_auto_configure:
 	dh_auto_configure -- -DAPP_BUILD=deb
 
+override_dh_auto_test:
+
 %:
 	dh $@ 

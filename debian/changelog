@@ -1,3 +1,13 @@
+opi-backend (0.7) vili; urgency=low
+
+  * Added deps on pkg-config and cppunit
+  * Read mailconfig on constructionRead mailconfig on construction
+  * Add smtp address and domain calls
+  * Rework argument checking
+  * Add more argument checks to commands
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 06 Aug 2014 11:03:53 +0200
+
 opi-backend (0.6) vili; urgency=low
 
   * PA must have som uncomitted changes... bump for build.
