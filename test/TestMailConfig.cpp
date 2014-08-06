@@ -33,9 +33,10 @@ void TestMailConfig::tearDown()
 void TestMailConfig::TestDomain()
 {
 	{
-		MailConfig mc("error.fil");
-		CPPUNIT_ASSERT_THROW( mc.ReadConfig(), runtime_error );
+		MailConfig* mc;
+		CPPUNIT_ASSERT_THROW( mc = new MailConfig("error.fil"), runtime_error );
 	}
+
 	{
 		MailConfig mc("ok.fil");
 		CPPUNIT_ASSERT_NO_THROW( mc.ReadConfig());

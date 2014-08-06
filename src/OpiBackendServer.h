@@ -56,6 +56,13 @@ private:
 	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	void DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
+	void DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 
 	// Helper functions
 	string ExecCmd(char* $cmd);

@@ -12,10 +12,36 @@
  * Bit patterns for argument checks
  * (A bit uggly but effective)
  */
-#define CHK_USR	0x01	// Check username
-#define CHK_PWD	0x02	// Check password
-#define CHK_DSP	0x04	// Check displayname
-#define CHK_NPW 0x08	// Check new password
+#define CHK_USR	0x0001	// Check username
+#define CHK_PWD	0x0002	// Check password
+#define CHK_DSP	0x0004	// Check displayname
+#define CHK_NPW 0x0008	// Check new password
+#define CHK_GRP 0x0010	// Check group
+#define CHK_DMN 0x0020	// Check domain
+#define CHK_ADR 0x0040	// Check address
+
+enum ArgCheckType{
+	STRING,
+	INT
+};
+
+typedef struct ArgCheckStruct
+{
+	int				check;
+	const char*		member;
+	ArgCheckType	type;
+}ArgCheckLine;
+
+static vector<ArgCheckLine> argchecks(
+	{
+			{ CHK_USR, "username",		ArgCheckType::STRING },
+			{ CHK_PWD, "password",		ArgCheckType::STRING },
+			{ CHK_NPW, "newpassword",	ArgCheckType::STRING },
+			{ CHK_DSP, "displayname",	ArgCheckType::STRING },
+			{ CHK_DMN, "domain",		ArgCheckType::STRING },
+			{ CHK_GRP, "group",			ArgCheckType::STRING },
+			{ CHK_ADR, "address",		ArgCheckType::STRING },
+	});
 
 // Convenience class for debug/trace
 class ScopedLog: public NoCopy
@@ -67,6 +93,12 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["backupgetstatus"]=&OpiBackendServer::DoBackupGetStatus;
 
 	this->actions["smtpgetdomains"]=&OpiBackendServer::DoSmtpGetDomains;
+	this->actions["smtpadddomain"]=&OpiBackendServer::DoSmtpAddDomain;
+	this->actions["smtpdeletedomain"]=&OpiBackendServer::DoSmtpDeleteDomain;
+
+	this->actions["smtpgetaddresses"]=&OpiBackendServer::DoSmtpGetAddresses;
+	this->actions["smtpaddaddress"]=&OpiBackendServer::DoSmtpAddAddress;
+	this->actions["smtpdeleteaddress"]=&OpiBackendServer::DoSmtpDeleteAddress;
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -450,6 +482,11 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
+	if( ! this->CheckArguments(client, CHK_GRP, cmd) )
+	{
+		return;
+	}
+
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
@@ -469,6 +506,11 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	ScopedLog l("Do add group member");
 
 	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_GRP, cmd) )
 	{
 		return;
 	}
@@ -493,6 +535,11 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	ScopedLog l("Do get group members");
 
 	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_GRP, cmd) )
 	{
 		return;
 	}
@@ -524,6 +571,11 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 		return;
 	}
 
+	if( ! this->CheckArguments(client, CHK_GRP, cmd) )
+	{
+		return;
+	}
+
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
@@ -546,6 +598,12 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	{
 		return;
 	}
+
+	if( ! this->CheckArguments(client, CHK_GRP, cmd) )
+	{
+		return;
+	}
+
 
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
@@ -813,6 +871,140 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 	this->SendOK(client, cmd, res);
 }
 
+void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp add domain");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_DMN, cmd) )
+	{
+		return;
+	}
+
+	string domain = cmd["domain"].asString();
+
+	MailConfig mc;
+
+	mc.AddDomain(domain);
+	mc.WriteConfig();
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp delete domain");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_DMN, cmd) )
+	{
+		return;
+	}
+
+	string domain = cmd["domain"].asString();
+
+	MailConfig mc;
+
+	mc.DeleteDomain(domain);
+	mc.WriteConfig();
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp get addresses");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_DMN, cmd) )
+	{
+		return;
+	}
+
+	string domain = cmd["domain"].asString();
+
+	MailConfig mc;
+
+	list<tuple<string,string>> addresses = mc.GetAddresses(domain);
+
+	Json::Value res(Json::objectValue);
+	res["addresses"]=Json::arrayValue;
+	for( auto address: addresses )
+	{
+		Json::Value adr;
+		adr["address"] = get<0>(address);
+		adr["username"] = get<1>(address);
+		res["addresses"].append(adr);
+	}
+
+	this->SendOK(client, cmd, res);
+
+}
+
+void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp add address");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_DMN | CHK_USR | CHK_ADR , cmd) )
+	{
+		return;
+	}
+
+	string domain = cmd["domain"].asString();
+	string username = cmd["username"].asString();
+	string address = cmd["address"].asString();
+
+	MailConfig mc;
+
+	mc.SetAddress(domain, username, address);
+	mc.WriteConfig();
+
+	this->SendOK(client, cmd );
+}
+
+void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp delete address");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_DMN | CHK_ADR , cmd) )
+	{
+		return;
+	}
+
+	string domain = cmd["domain"].asString();
+	string address = cmd["address"].asString();
+
+	MailConfig mc;
+
+	mc.DeleteAddress( domain, address );
+	mc.WriteConfig();
+
+	this->SendOK(client, cmd );
+
+}
+
 
 bool OpiBackendServer::CheckLoggedIn(const string &username)
 {
@@ -971,57 +1163,36 @@ string OpiBackendServer::ExecCmd(char* cmd)
 }
 
 static inline bool
-CheckUsername(const Json::Value& cmd)
+CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type)
 {
-	return !cmd.isNull() &&	cmd.isMember("username") && cmd["username"].isString();
-}
+	if( cmd.isNull() )
+	{
+		return false;
+	}
 
-static inline bool
-CheckPassword(const Json::Value& cmd)
-{
-	return !cmd.isNull() &&	cmd.isMember("password") && cmd["password"].isString();
+	switch( type )
+	{
+	case ArgCheckType::STRING:
+		return cmd.isMember( member ) && cmd[member].isString();
+		break;
+	case ArgCheckType::INT:
+		return cmd.isMember( member ) && cmd[member].isInt();
+		break;
+	default:
+		return false;
+	}
 }
-
-static inline bool
-CheckNewPassword(const Json::Value& cmd)
-{
-	return !cmd.isNull() &&	cmd.isMember("newpassword") && cmd["newpassword"].isString();
-}
-
-static inline bool
-CheckDisplayname(const Json::Value& cmd)
-{
-	return !cmd.isNull() &&	cmd.isMember("displayname") && cmd["displayname"].isString();
-}
-
 
 bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd)
 {
-	if( ( what & CHK_USR) && !CheckUsername(cmd) )
+	for( auto check: argchecks )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return false;
+		if( what & check.check && ! CheckArgument( cmd, check.member, check.type) )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			return false;
+		}
 	}
-
-	if( ( what & CHK_PWD) && !CheckPassword(cmd) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return false;
-	}
-
-	if( ( what & CHK_NPW) && !CheckNewPassword(cmd) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return false;
-	}
-
-	if( ( what & CHK_DSP) && !CheckDisplayname(cmd) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return false;
-	}
-
-
 	return true;
 }
 

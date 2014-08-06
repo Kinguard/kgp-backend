@@ -2,7 +2,12 @@ Source: opi-backend
 Section:admin
 Priority: optional
 Maintainer: Tor Krill <tor@openproducts.se>
-Build-Depends: debhelper (>= 8.0.0), cmake, libutils-dev, libjsoncpp-dev
+Build-Depends: debhelper (>= 8.0.0),
+	cmake,
+	pkg-config,
+	libutils-dev,
+	libcppunit-dev,
+	libjsoncpp-dev
 Standards-Version: 3.9.4
 Homepage: http://www.openproducts.com
 

@@ -6,6 +6,7 @@
 MailConfig::MailConfig(const string &aliasfile, const string &domainfile)
 	: aliasesfile(aliasfile), domainfile(domainfile)
 {
+	this->ReadConfig();
 }
 
 void MailConfig::ReadConfig()
