@@ -12,6 +12,8 @@ MailConfig::MailConfig(const string &aliasfile, const string &domainfile)
 void MailConfig::ReadConfig()
 {
 	this->config.clear();
+
+	// Read aliases
 	list<string> al = File::GetContent( this->aliasesfile);
 
 	for( string line: al)
@@ -46,6 +48,16 @@ void MailConfig::ReadConfig()
 		}
 	}
 
+	// Read domains since it could be that we have domains without users(??)
+	list<string> dm = File::GetContent( this->domainfile);
+
+	for( string line: dm)
+	{
+		if( this->config.find( line ) == this->config.end() )
+		{
+			this->config[line] = map<string,string>();
+		}
+	}
 }
 
 void MailConfig::AddDomain(const string &domain)

@@ -11,6 +11,9 @@ CPPUNIT_TEST_SUITE_REGISTRATION ( TestMailConfig );
 
 void TestMailConfig::setUp()
 {
+	unlink("domains");
+	unlink("vmailbox");
+
 	{
 		ofstream of("error.fil");
 		of << "Detta är ett test!"<<endl;
@@ -22,12 +25,23 @@ void TestMailConfig::setUp()
 		of << "test@kalle.com\ttest/mail/\n";
 		of.close();
 	}
+
+	//exit(0);
 }
 
 void TestMailConfig::tearDown()
 {
-	unlink("error.fil");
-	unlink("ok.fil");
+	if( unlink("error.fil") != 0)
+	{
+		cerr << "Failed to erase error file"<<endl;
+	}
+
+	if( unlink("ok.fil") != 0 )
+	{
+		cerr << "Failed to erase error file"<<endl;
+	}
+	unlink("domains");
+	unlink("vmailbox");
 }
 
 void TestMailConfig::TestDomain()
@@ -38,10 +52,12 @@ void TestMailConfig::TestDomain()
 	}
 
 	{
+		system("cat ok.fil");
 		MailConfig mc("ok.fil");
 		CPPUNIT_ASSERT_NO_THROW( mc.ReadConfig());
 
 		list<string> doms = mc.GetDomains();
+		for(auto x: doms) cout << x<<endl;
 		CPPUNIT_ASSERT_EQUAL( (size_t)1, doms.size() );
 
 		CPPUNIT_ASSERT_EQUAL( doms.front(), string("kalle.com"));
