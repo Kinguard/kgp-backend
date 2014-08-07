@@ -107,6 +107,8 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 
 	this->actions["networkgetportstatus"]=&OpiBackendServer::DoNetworkGetPortStatus;
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
+	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
+
 	// Setup mail paths etc
 	postfix_fixpaths();
 
@@ -1146,6 +1148,28 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
 	c[port] = state;
 	c.Sync(true, 0644);
 	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Get OPI name");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( File::FileExists(SYS_INFO))
+	{
+		ConfigFile c(SYS_INFO);
+		res["opiname"] = c.ValueOrDefault("opi_name");
+		this->SendOK(client, cmd, res);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
+	}
 }
 
 

@@ -65,6 +65,7 @@ private:
 
 	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
 	string ExecCmd(char* $cmd);
