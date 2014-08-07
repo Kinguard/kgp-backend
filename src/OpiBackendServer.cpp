@@ -973,7 +973,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 
 	MailConfig mc;
 
-	mc.SetAddress(domain, username, address);
+	mc.SetAddress(domain, address, username);
 	mc.WriteConfig();
 
 	this->SendOK(client, cmd );
