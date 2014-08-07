@@ -931,12 +931,12 @@ static void postfix_fixpaths()
 {
 	if( ! File::FileExists( ALIASES ) )
 	{
-		File::Write( ALIASES, "", 0640);
+		File::Write( ALIASES, "", 0600);
 	}
 
 	if( ! File::FileExists( DOMAINFILE ) )
 	{
-		File::Write( DOMAINFILE, "", 0640);
+		File::Write( DOMAINFILE, "", 0600);
 	}
 
 	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
@@ -946,7 +946,17 @@ static void postfix_fixpaths()
 
 	if( chown( DOMAINFILE, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
-		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
+		logg << Logger::Error << "Failed to change owner on domain file"<<lend;
+	}
+
+	if( chown( File::GetPath(DOMAINFILE).c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on config directory"<<lend;
+	}
+
+	if( chmod( File::GetPath(DOMAINFILE).c_str(), 0700 ) != 0)
+	{
+		logg << Logger::Error << "Failed to change mode on config directory"<<lend;
 	}
 }
 
