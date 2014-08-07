@@ -1,10 +1,12 @@
 #include "OpiBackendServer.h"
 #include "MailConfig.h"
+#include "Config.h"
 
 #include <libutils/Logger.h>
 #include <libutils/String.h>
 #include <libutils/FileUtils.h>
 #include <libutils/ConfigFile.h>
+#include <libutils/UserGroups.h>
 
 #include <algorithm>
 
@@ -61,6 +63,9 @@ public:
 
 };
 
+// Utility function forwards
+static bool update_postfix();
+static void postfix_fixpaths();
 
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
@@ -102,6 +107,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 
 	this->actions["networkgetportstatus"]=&OpiBackendServer::DoNetworkGetPortStatus;
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
+	// Setup mail paths etc
+	postfix_fixpaths();
+
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -898,6 +906,62 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 	this->SendOK(client, cmd);
 }
 
+
+// Todo: rewrite (Implement service/process in utils?)
+static bool update_postfix()
+{
+	int ret;
+
+	ret = system( "/usr/sbin/postmap " ALIASES );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
+	ret = system( "/usr/sbin/service postfix reload &> /dev/null" );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
+	return true;
+}
+
+static void postfix_fixpaths()
+{
+	if( ! File::FileExists( ALIASES ) )
+	{
+		File::Write( ALIASES, "", 0600);
+	}
+
+	if( ! File::FileExists( DOMAINFILE ) )
+	{
+		File::Write( DOMAINFILE, "", 0600);
+	}
+
+	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
+	}
+
+	if( chown( DOMAINFILE, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on domain file"<<lend;
+	}
+
+	if( chown( File::GetPath(DOMAINFILE).c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on config directory"<<lend;
+	}
+
+	if( chmod( File::GetPath(DOMAINFILE).c_str(), 0700 ) != 0)
+	{
+		logg << Logger::Error << "Failed to change mode on config directory"<<lend;
+	}
+}
+
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp delete domain");
@@ -919,7 +983,14 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 	mc.DeleteDomain(domain);
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd);
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -976,10 +1047,17 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 
 	MailConfig mc;
 
-	mc.SetAddress(domain, username, address);
+	mc.SetAddress(domain, address, username);
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd );
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1004,8 +1082,14 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	mc.DeleteAddress( domain, address );
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd );
-
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
