@@ -6,6 +6,7 @@
 #include <libutils/String.h>
 #include <libutils/FileUtils.h>
 #include <libutils/ConfigFile.h>
+#include <libutils/UserGroups.h>
 
 #include <algorithm>
 
@@ -62,6 +63,9 @@ public:
 
 };
 
+// Utility function forwards
+static bool update_postfix();
+static void postfix_fixpaths();
 
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
@@ -100,6 +104,10 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["smtpgetaddresses"]=&OpiBackendServer::DoSmtpGetAddresses;
 	this->actions["smtpaddaddress"]=&OpiBackendServer::DoSmtpAddAddress;
 	this->actions["smtpdeleteaddress"]=&OpiBackendServer::DoSmtpDeleteAddress;
+
+	// Setup mail paths etc
+	postfix_fixpaths();
+
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -902,7 +910,7 @@ static bool update_postfix()
 {
 	int ret;
 
-	ret = system( "/usr/sbin/postmap" ALIASES );
+	ret = system( "/usr/sbin/postmap " ALIASES );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
 	{
@@ -917,6 +925,29 @@ static bool update_postfix()
 	}
 
 	return true;
+}
+
+static void postfix_fixpaths()
+{
+	if( ! File::FileExists( ALIASES ) )
+	{
+		File::Write( ALIASES, "", 0640);
+	}
+
+	if( ! File::FileExists( DOMAINFILE ) )
+	{
+		File::Write( DOMAINFILE, "", 0640);
+	}
+
+	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
+	}
+
+	if( chown( DOMAINFILE, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
+	}
 }
 
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
