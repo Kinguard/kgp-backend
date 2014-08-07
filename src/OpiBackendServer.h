@@ -63,6 +63,8 @@ private:
 	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
+	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
 	string ExecCmd(char* $cmd);

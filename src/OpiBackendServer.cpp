@@ -99,6 +99,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["smtpgetaddresses"]=&OpiBackendServer::DoSmtpGetAddresses;
 	this->actions["smtpaddaddress"]=&OpiBackendServer::DoSmtpAddAddress;
 	this->actions["smtpdeleteaddress"]=&OpiBackendServer::DoSmtpDeleteAddress;
+
+	this->actions["networkgetportstatus"]=&OpiBackendServer::DoNetworkGetPortStatus;
+	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -1003,6 +1006,62 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 
 	this->SendOK(client, cmd );
 
+}
+
+void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Get port state");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+	string port = "ports["+cmd["port"].asString()+"]";
+
+	if( File::FileExists(ACCESS_CONFIG))
+	{
+		ConfigFile c(ACCESS_CONFIG);
+		res["is_open"] = c.ValueOrDefault(port,"no");
+		this->SendOK(client, cmd, res);
+	}
+	else
+	{
+		res["is_open"] = "no";
+		this->SendOK(client, cmd, res);
+	}
+}
+
+void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+	Json::Value res(Json::objectValue);
+
+	ScopedLog l("Set port state");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+	string port = "ports["+cmd["port"].asString()+"]";
+	string state;
+	if(cmd["set_open"].asBool())
+	{
+		state = "yes";
+	}
+	else
+	{
+		state = "no";
+	}
+
+	string access_path = File::GetPath( ACCESS_CONFIG );
+	if( ! File::DirExists( access_path ) )
+	{
+		File::MkPath( access_path, 0755);
+	}
+
+	ConfigFile c(ACCESS_CONFIG);
+	c[port] = state;
+	c.Sync(true, 0644);
+	this->SendOK(client, cmd);
 }
 
 

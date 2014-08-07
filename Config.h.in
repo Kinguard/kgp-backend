@@ -36,4 +36,6 @@
 #define BACKUP_COMPLETE "/var/log/opi-backup/complete"
 #define BACKUP_GET_QUOTA "/usr/share/opi-backup/get_quota.py"
 
+#define ACCESS_CONFIG "/etc/opi/opi-access.conf"
+
 #endif
