@@ -1,5 +1,6 @@
 #include "OpiBackendServer.h"
 #include "MailConfig.h"
+#include "Config.h"
 
 #include <libutils/Logger.h>
 #include <libutils/String.h>
@@ -895,6 +896,29 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 	this->SendOK(client, cmd);
 }
 
+
+// Todo: rewrite (Implement service/process in utils?)
+static bool update_postfix()
+{
+	int ret;
+
+	ret = system( "/usr/sbin/postmap" ALIASES );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
+	ret = system( "/usr/sbin/service postfix reload &> /dev/null" );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
+	return true;
+}
+
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp delete domain");
@@ -916,7 +940,14 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 	mc.DeleteDomain(domain);
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd);
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -976,7 +1007,14 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 	mc.SetAddress(domain, address, username);
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd );
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1001,8 +1039,14 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	mc.DeleteAddress( domain, address );
 	mc.WriteConfig();
 
-	this->SendOK(client, cmd );
-
+	if( update_postfix() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+	}
 }
 
 
