@@ -809,7 +809,8 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 
 	c.Sync(true, 0644);
 	this->SendOK(client, cmd);
-	if(backend == "s3op://") {
+	if(backend == "remote" || backend == "local")
+	{
 		this->ExecCmd((char*) BACKUP_MOUNT_FS);
 		this->ExecCmd((char*) BACKUP_LINK);
 	}
