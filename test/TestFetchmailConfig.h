@@ -6,13 +6,15 @@
 class TestFetchmailConfig: public CppUnit::TestFixture
 {
 	CPPUNIT_TEST_SUITE( TestFetchmailConfig );
-	CPPUNIT_TEST( Test );
+	CPPUNIT_TEST( TestBasicUsage );
+	CPPUNIT_TEST( TestErrorCases );
 	CPPUNIT_TEST_SUITE_END();
 public:
 	void setUp();
 	void tearDown();
 
-	void Test();
+	void TestBasicUsage();
+	void TestErrorCases();
 };
 
 #endif /* TESTFETCHMAILCONFIG_H_ */

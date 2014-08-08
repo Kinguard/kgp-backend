@@ -63,6 +63,12 @@ private:
 	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
+	void DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);

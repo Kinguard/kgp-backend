@@ -155,7 +155,7 @@ void FetchmailConfig::WriteConfig()
 		}
 	}
 
-	File::Write( this->configfile, out.str(), 0700);
+	File::Write( this->configfile, out.str(), 0600);
 }
 
 FetchmailConfig::~FetchmailConfig()

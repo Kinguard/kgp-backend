@@ -1,4 +1,5 @@
 #include "OpiBackendServer.h"
+#include "FetchmailConfig.h"
 #include "MailConfig.h"
 #include "Config.h"
 
@@ -21,6 +22,8 @@
 #define CHK_GRP 0x0010	// Check group
 #define CHK_DMN 0x0020	// Check domain
 #define CHK_ADR 0x0040	// Check address
+#define CHK_HST 0x0080  // Check hostname
+#define CHK_IDN 0x0100  // Check identity
 
 enum ArgCheckType{
 	STRING,
@@ -43,6 +46,8 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_DMN, "domain",		ArgCheckType::STRING },
 			{ CHK_GRP, "group",			ArgCheckType::STRING },
 			{ CHK_ADR, "address",		ArgCheckType::STRING },
+			{ CHK_HST, "hostname",		ArgCheckType::STRING },
+			{ CHK_IDN, "identity",		ArgCheckType::STRING },
 	});
 
 // Convenience class for debug/trace
@@ -104,6 +109,12 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["smtpgetaddresses"]=&OpiBackendServer::DoSmtpGetAddresses;
 	this->actions["smtpaddaddress"]=&OpiBackendServer::DoSmtpAddAddress;
 	this->actions["smtpdeleteaddress"]=&OpiBackendServer::DoSmtpDeleteAddress;
+
+	this->actions["fetchmailgetaccounts"]=&OpiBackendServer::DoFetchmailGetAccounts;
+	this->actions["fetchmailgetaccount"]=&OpiBackendServer::DoFetchmailGetAccount;
+	this->actions["fetchmailaddaccount"]=&OpiBackendServer::DoFetchmailAddAccount;
+	this->actions["fetchmailupdateaccount"]=&OpiBackendServer::DoFetchmailUpdateAccount;
+	this->actions["fetchmaildeleteaccount"]=&OpiBackendServer::DoFetchmailDeleteAccount;
 
 	this->actions["networkgetportstatus"]=&OpiBackendServer::DoNetworkGetPortStatus;
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
@@ -1092,6 +1103,148 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
 	}
+}
+
+void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do fetchmail get accounts");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	// Username is optional here
+	string user;
+	if(cmd.isMember( "username" ) && cmd["username"].isString())
+	{
+		user = cmd["username"].asString();
+	}
+
+	FetchmailConfig fc( FETCHMAILRC );
+	list<map<string,string>> accounts = fc.GetAccounts(user);
+
+	Json::Value ret(Json::objectValue);
+	ret["accounts"] = Json::arrayValue;
+
+	for( auto& account: accounts )
+	{
+		Json::Value acc(Json::objectValue);
+		acc["host"] = account["host"];
+		acc["identity"] = account["identity"];
+		acc["username"] = account["username"];
+		ret["accounts"].append(acc);
+	}
+
+	this->SendOK(client, cmd,ret);
+
+}
+
+void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do fetchmail get account");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN , cmd) )
+	{
+		return;
+	}
+
+	string host = cmd["hostname"].asString();
+	string id = cmd["identity"].asString();
+
+	FetchmailConfig fc( FETCHMAILRC );
+	map<string,string> account = fc.GetAccount(host,id);
+
+	Json::Value ret(Json::objectValue);
+	ret["host"] = account["host"];
+	ret["identity"] = account["identity"];
+	ret["username"] = account["username"];
+
+	this->SendOK(client, cmd,ret);
+}
+
+void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do fetchmail add account");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR , cmd) )
+	{
+		return;
+	}
+
+	string host = cmd["hostname"].asString();
+	string id = cmd["identity"].asString();
+	string pwd = cmd["password"].asString();
+	string user = cmd["username"].asString();
+
+	FetchmailConfig fc( FETCHMAILRC );
+
+	fc.AddAccount(host, id, pwd, user );
+	fc.WriteConfig();
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do fetchmail update account");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR , cmd) )
+	{
+		return;
+	}
+
+	string host = cmd["hostname"].asString();
+	string id = cmd["identity"].asString();
+	string pwd = cmd["password"].asString();
+	string user = cmd["username"].asString();
+
+	FetchmailConfig fc( FETCHMAILRC );
+
+	fc.UpdateAccount(host, id, pwd, user );
+	fc.WriteConfig();
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do fetchmail delete account");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN , cmd) )
+	{
+		return;
+	}
+
+	string host = cmd["hostname"].asString();
+	string id = cmd["identity"].asString();
+
+	FetchmailConfig fc( FETCHMAILRC );
+
+	fc.DeleteAccount(host, id );
+	fc.WriteConfig();
+
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {

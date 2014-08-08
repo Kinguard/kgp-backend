@@ -44,7 +44,7 @@ void TestFetchmailConfig::tearDown()
 	unlink("test.fil");
 }
 
-void TestFetchmailConfig::Test()
+void TestFetchmailConfig::TestBasicUsage()
 {
 	FetchmailConfig fc("test.fil");
 
@@ -115,4 +115,13 @@ void TestFetchmailConfig::Test()
 
 	CPPUNIT_ASSERT_EQUAL( (size_t)0, fc.GetHosts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)0, fc.GetAccounts().size() );
+}
+
+void TestFetchmailConfig::TestErrorCases()
+{
+	FetchmailConfig fc("no.fil");
+	CPPUNIT_ASSERT_NO_THROW( fc.ReadConfig()	);
+
+	CPPUNIT_ASSERT_NO_THROW( fc.GetAccounts() );
+
 }

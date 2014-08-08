@@ -19,6 +19,8 @@
 	#define ALIASES         "/var/opi/mail/conf/vmailbox"
 #endif
 
+#define FETCHMAILRC	"/var/opi/etc/fetchmailrc"
+
 // For unittests
 #define APP_PATH "@APP_PATH@"
 #define SRC_PATH "@SRC_PATH@"
