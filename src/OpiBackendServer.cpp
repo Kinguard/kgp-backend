@@ -975,6 +975,23 @@ static void postfix_fixpaths()
 	}
 }
 
+static bool restart_fetchmail()
+{
+	int ret;
+
+
+	ret = system( "/usr/sbin/service fetchmail restart &> /dev/null" );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp delete domain");
@@ -1191,6 +1208,7 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 
 	fc.AddAccount(host, id, pwd, user );
 	fc.WriteConfig();
+	restart_fetchmail();
 
 	this->SendOK(client, cmd);
 }
@@ -1218,6 +1236,7 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 
 	fc.UpdateAccount(host, id, pwd, user );
 	fc.WriteConfig();
+	restart_fetchmail();
 
 	this->SendOK(client, cmd);
 }
@@ -1243,6 +1262,7 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 
 	fc.DeleteAccount(host, id );
 	fc.WriteConfig();
+	restart_fetchmail();
 
 	this->SendOK(client, cmd);
 }
