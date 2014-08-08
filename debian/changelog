@@ -1,3 +1,9 @@
+opi-backend (0.9) vili; urgency=low
+
+  * Implemented fetchmail methods
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 08 Aug 2014 15:57:05 +0200
+
 opi-backend (0.8) vili; urgency=low
 
   * Reload postfix on updates 
