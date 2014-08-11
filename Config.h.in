@@ -20,6 +20,7 @@
 #endif
 
 #define FETCHMAILRC	"/var/opi/etc/fetchmailrc"
+#define SASLPASSWD	"/var/opi/mail/conf/sasl_passwd"
 
 // For unittests
 #define APP_PATH "@APP_PATH@"

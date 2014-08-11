@@ -2,6 +2,7 @@ set( applib_src
 	OpiBackendApp.cpp
 	OpiBackendServer.cpp
 	FetchmailConfig.cpp
+	SmtpClientConfig.cpp
 	MailConfig.cpp
 	Secop.cpp
 	)

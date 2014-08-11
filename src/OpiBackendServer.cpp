@@ -1,4 +1,5 @@
 #include "OpiBackendServer.h"
+#include "SmtpClientConfig.h"
 #include "FetchmailConfig.h"
 #include "MailConfig.h"
 #include "Config.h"
@@ -24,6 +25,7 @@
 #define CHK_ADR 0x0040	// Check address
 #define CHK_HST 0x0080  // Check hostname
 #define CHK_IDN 0x0100  // Check identity
+#define CHK_PRT 0x0200  // Check port
 
 enum ArgCheckType{
 	STRING,
@@ -48,6 +50,7 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_ADR, "address",		ArgCheckType::STRING },
 			{ CHK_HST, "hostname",		ArgCheckType::STRING },
 			{ CHK_IDN, "identity",		ArgCheckType::STRING },
+			{ CHK_PRT, "port",			ArgCheckType::STRING },
 	});
 
 // Convenience class for debug/trace
@@ -109,6 +112,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["smtpgetaddresses"]=&OpiBackendServer::DoSmtpGetAddresses;
 	this->actions["smtpaddaddress"]=&OpiBackendServer::DoSmtpAddAddress;
 	this->actions["smtpdeleteaddress"]=&OpiBackendServer::DoSmtpDeleteAddress;
+
+	this->actions["smtpgetsettings"]=&OpiBackendServer::DoSmtpGetSettings;
+	this->actions["smtpsetsettings"]=&OpiBackendServer::DoSmtpSetSettings;
 
 	this->actions["fetchmailgetaccounts"]=&OpiBackendServer::DoFetchmailGetAccounts;
 	this->actions["fetchmailgetaccount"]=&OpiBackendServer::DoFetchmailGetAccount;
@@ -932,6 +938,13 @@ static bool update_postfix()
 		return false;
 	}
 
+	ret = system( "/usr/sbin/postmap " SASLPASSWD );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
 	ret = system( "/usr/sbin/service postfix reload &> /dev/null" );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
@@ -949,6 +962,11 @@ static void postfix_fixpaths()
 		File::Write( ALIASES, "", 0600);
 	}
 
+	if( ! File::FileExists( SASLPASSWD ) )
+	{
+		File::Write( SASLPASSWD, "", 0600);
+	}
+
 	if( ! File::FileExists( DOMAINFILE ) )
 	{
 		File::Write( DOMAINFILE, "", 0600);
@@ -957,6 +975,11 @@ static void postfix_fixpaths()
 	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
+	}
+
+	if( chown( SASLPASSWD, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	{
+		logg << Logger::Error << "Failed to change owner on saslpasswd file"<<lend;
 	}
 
 	if( chown( DOMAINFILE, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
@@ -1120,6 +1143,72 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
 	}
+}
+
+void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp get settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	SmtpClientConfig cfg( SASLPASSWD );
+	passwdline line = cfg.GetConfig();
+
+	Json::Value ret;
+	ret["usecustom"] =	line.host != "";
+	ret["relay"] =		line.host;
+	ret["username"] =	line.user;
+	ret["password"] =	line.pass;
+	ret["port"] =		line.port;
+
+	this->SendOK(client, cmd,ret);
+
+}
+
+void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do smtp set settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR | CHK_PWD | CHK_HST | CHK_PRT , cmd) )
+	{
+		return;
+	}
+
+	if( !cmd.isMember("usecustom") || cmd["usecustom"].isBool() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
+	bool   usec = cmd["usecustom"].asBool();
+	string user = cmd["username"].asString();
+	string pass = cmd["password"].asString();
+	string host = cmd["hostname"].asString();
+	string port = cmd["port"].asString();
+
+	passwdline cfg;
+	cfg.enabled = usec;
+	cfg.host = host;
+	cfg.pass = pass;
+	cfg.port = port;
+	cfg.user = user;
+
+	SmtpClientConfig scli( SASLPASSWD );
+	scli.SetConfig( cfg );
+
+	scli.WriteConfig();
+
+	update_postfix();
+
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1487,7 +1576,7 @@ string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
 
 // Local helper functions
 
-string OpiBackendServer::ExecCmd(char* cmd)
+string OpiBackendServer::ExecCmd(const char* cmd)
 {
 	FILE* pipe = popen(cmd, "r");
 	if (!pipe) return "ERROR";

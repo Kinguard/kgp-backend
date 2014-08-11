@@ -62,6 +62,8 @@ private:
 	void DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	void DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
@@ -74,7 +76,7 @@ private:
 	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
-	string ExecCmd(char* $cmd);
+	string ExecCmd(const char *$cmd);
 
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(const string& username);

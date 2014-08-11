@@ -122,7 +122,7 @@ void FetchmailConfig::ReadConfig()
 			{
 				continue;
 			}
-			string identity =	String::Trimmed(getmatchstring( line, m[1]), "'\"" );
+			string identity =	String::Trimmed( getmatchstring( line, m[1]), "'\"" );
 			string password =	String::Trimmed( getmatchstring( line, m[2]), "'\"" );
 			string user =		String::Trimmed( getmatchstring( line, m[3]), "'\"" );
 			this->config[lasthost][identity] =

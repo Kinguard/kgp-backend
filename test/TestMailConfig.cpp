@@ -52,12 +52,11 @@ void TestMailConfig::TestDomain()
 	}
 
 	{
-		system("cat ok.fil");
-		MailConfig mc("ok.fil");
+		MailConfig mc("ok.fil","domains");
 		CPPUNIT_ASSERT_NO_THROW( mc.ReadConfig());
 
 		list<string> doms = mc.GetDomains();
-		for(auto x: doms) cout << x<<endl;
+		//for(auto x: doms) cout << x<<endl;
 		CPPUNIT_ASSERT_EQUAL( (size_t)1, doms.size() );
 
 		CPPUNIT_ASSERT_EQUAL( doms.front(), string("kalle.com"));
@@ -74,6 +73,20 @@ void TestMailConfig::TestDomain()
 		CPPUNIT_ASSERT_EQUAL( (size_t)2, mc.GetDomains().size() );
 
 		CPPUNIT_ASSERT_THROW( mc.DeleteDomain("test.com"), runtime_error);
+		CPPUNIT_ASSERT_EQUAL( (size_t)2, mc.GetDomains().size() );
+
+		mc.DeleteDomain("test2.com");
+		mc.DeleteDomain("kalle.com");
+		CPPUNIT_ASSERT_EQUAL( (size_t)0, mc.GetDomains().size() );
+
+		mc.WriteConfig();
+		mc.ReadConfig();
+		CPPUNIT_ASSERT_EQUAL( (size_t)0, mc.GetDomains().size() );
+		mc.AddDomain("krill.nu");
+		mc.WriteConfig();
+		mc.ReadConfig();
+		mc.AddDomain("krill2.nu");
+		mc.WriteConfig();
 		CPPUNIT_ASSERT_EQUAL( (size_t)2, mc.GetDomains().size() );
 	}
 }
