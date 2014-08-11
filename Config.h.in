@@ -38,7 +38,8 @@
 #define BACKUP_ERRORS "/var/log/opi-backup/errors"
 #define BACKUP_COMPLETE "/var/log/opi-backup/complete"
 #define BACKUP_GET_QUOTA "/usr/share/opi-backup/get_quota.py"
-
+#define BACKUP_MOUNT_FS "/usr/share/opi-backup/mount_fs.sh"
+#define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 #define ACCESS_CONFIG "/etc/opi/opi-access.conf"
 
 #define SYS_INFO "/etc/opi/sysinfo.conf"

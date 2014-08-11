@@ -1,3 +1,9 @@
+opi-backend (0.11) vili; urgency=medium
+
+  * Creating filesystem on target when selecting target from UI. 
+
+ -- PA Nilsson <pa@openproducts.se>  Sat, 09 Aug 2014 13:44:01 +0000
+
 opi-backend (0.10) vili; urgency=low
 
   * Restart fetchmail upon change
