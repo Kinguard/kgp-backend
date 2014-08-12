@@ -296,6 +296,14 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
+	// Add user to local mail
+	MailMapFile mmf( LOCAL_MAILFILE );
+	mmf.ReadConfig();
+	mmf.SetAddress("localdomain", user, user);
+	mmf.WriteConfig();
+
+	update_postfix();
+
 	this->SendOK(client, cmd);
 }
 
@@ -323,6 +331,14 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		this->SendErrorMessage(client, cmd, 400, "Failed");
 		return;
 	}
+
+	// Add remove user from local mail
+	MailMapFile mmf( LOCAL_MAILFILE );
+	mmf.ReadConfig();
+	mmf.DeleteAddress("localdomain", user);
+	mmf.WriteConfig();
+
+	update_postfix();
 
 	this->SendOK(client, cmd);
 }
@@ -950,6 +966,13 @@ static bool update_postfix()
 		return false;
 	}
 
+	ret = system( "/usr/sbin/postmap " LOCAL_MAILFILE );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+
 	ret = system( "/usr/sbin/service postfix reload &> /dev/null" );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
@@ -975,6 +998,11 @@ static void postfix_fixpaths()
 	if( ! File::FileExists( DOMAINFILE ) )
 	{
 		File::Write( DOMAINFILE, "", 0600);
+	}
+
+	if( ! File::FileExists( LOCAL_MAILFILE ) )
+	{
+		File::Write( LOCAL_MAILFILE, "", 0600);
 	}
 
 	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)

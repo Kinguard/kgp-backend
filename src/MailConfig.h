@@ -13,26 +13,20 @@ using namespace Utils;
 
 #include "Config.h"
 
-class MailConfig
+class MailMapFile
 {
 public:
-	MailConfig(const string& aliasfile=ALIASES,const string& domainfile=DOMAINFILE);
+	MailMapFile(const string& aliasfile);
 
-	void ReadConfig();
-
-	void AddDomain(const string& domain);
-	void DeleteDomain(const string& domain);
-	list<string> GetDomains();
+	virtual void ReadConfig();
+	virtual void WriteConfig();
 
 	void SetAddress(const string& domain, const string& address, const string& user);
 	void DeleteAddress(const string& domain, const string& address);
 	list<tuple<string,string>> GetAddresses(const string& domain);
 
-	void WriteConfig();
-
-	virtual ~MailConfig();
-private:
-
+	virtual ~MailMapFile();
+protected:
 	inline bool hasDomain(const string& domain);
 	inline bool hasAddress(const string& domain, const string& address);
 
@@ -40,6 +34,23 @@ private:
 	map<string, map<string,string> > config;
 
 	string aliasesfile;
+};
+
+class MailConfig: public MailMapFile
+{
+public:
+	MailConfig(const string& aliasfile=ALIASES,const string& domainfile=DOMAINFILE);
+
+	virtual void ReadConfig();
+
+	void AddDomain(const string& domain);
+	void DeleteDomain(const string& domain);
+	list<string> GetDomains();
+
+	virtual void WriteConfig();
+
+	virtual ~MailConfig();
+private:
 	string domainfile;
 };
 

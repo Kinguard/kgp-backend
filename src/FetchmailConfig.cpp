@@ -151,7 +151,9 @@ void FetchmailConfig::WriteConfig()
 		map< string, pair<string,string> > users = cfgline.second;
 		for( const auto& user: users )
 		{
-			out << "\tuser '"<<user.first <<"' there with password '"<<user.second.first << "' is '"<<user.second.second<< "' here\n";
+			out << "\tuser '"<<user.first <<"' there with password '"
+				<<user.second.first << "' is '"<<user.second.second
+			   << "' here smtpaddress localdomain\n";
 		}
 	}
 

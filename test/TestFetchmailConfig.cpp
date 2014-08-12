@@ -22,18 +22,18 @@ void TestFetchmailConfig::setUp()
 	<< "\n"
 	<< "poll    pop3.mymailhost.nu with proto POP3 \n"
 	<< "	interval 5\n"
-	<< "	user 'tor@krill.nu' there with password 'd32 2d2d' is 'bengt' here ssl\n"
+	<< "	user 'tor@krill.nu' there with password 'd32 2d2d' is 'bengt' here ssl smtpaddress localdomain\n"
 	<< "	user 'info@krill.nu' there with password 'd2d243r2r' is 'sven' here ssl\n"
 	<< "\n"
 	<< "#poll    pop3.mymailhost.nu with proto POP3 \n"
 	<< "#	interval 5\n"
-	<< " #	user 'tor@krill.nu' there with password 'd32 2d2d' is 'bengt' here ssl\n"
+	<< " #	user 'tor@krill.nu' there with password 'd32 2d2d' is 'bengt' here ssl smtpaddress localdomain\n"
 	<< "#	user 'info@krill.nu' there with password 'd2d243r2r' is 'sven' here ssl\n"
 	<< "\n"
 	<< "poll  pop3.gmail.se with proto POP3 \n"
 	<< "	interval 5\n"
-	<< "	user 'kalle' there with password 'd3 22d2d' is 'sven' here ssl\n"
-	<< "	user 'bengt' there with password 'd2d243r2r' is 'bengt' here ssl\n";
+	<< "	user 'kalle' there with password 'd3 22d2d' is 'sven' here ssl smtpaddress localdomain\n"
+	<< "	user 'bengt' there with password 'd2d243r2r' is 'bengt' here ssl smtpaddress localdomain\n";
 
 	out.close();
 
