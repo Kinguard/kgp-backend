@@ -1,3 +1,9 @@
+opi-backend (0.16) vili; urgency=low
+
+  * Interpret bool string representation in argument.
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 13 Aug 2014 17:08:00 +0200
+
 opi-backend (0.15) vili; urgency=low
 
   * Fix bug for empty relayhost

@@ -1217,20 +1217,20 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	if( !cmd.isMember("usecustom") || cmd["usecustom"].isBool() )
+	if( !cmd.isMember("usecustom") || cmd["usecustom"].isString() )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Missing argument");
 		return;
 	}
 
-	bool   usec = cmd["usecustom"].asBool();
+	string usec = cmd["usecustom"].asString();
 	string user = cmd["username"].asString();
 	string pass = cmd["password"].asString();
 	string host = cmd["hostname"].asString();
 	string port = cmd["port"].asString();
 
 	passwdline cfg;
-	cfg.enabled = usec;
+	cfg.enabled = ( usec == "true" );
 	cfg.host = host;
 	cfg.pass = pass;
 	cfg.port = port;
