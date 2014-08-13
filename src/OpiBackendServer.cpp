@@ -1217,8 +1217,9 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	if( !cmd.isMember("usecustom") || cmd["usecustom"].isString() )
+	if( !cmd.isMember("usecustom") || !cmd["usecustom"].isString() )
 	{
+		logg << Logger::Debug<< "Failed to parse custom argument"<<lend;
 		this->SendErrorMessage(client, cmd, 400, "Missing argument");
 		return;
 	}
@@ -1229,12 +1230,17 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	string host = cmd["hostname"].asString();
 	string port = cmd["port"].asString();
 
+	bool usecustom = ( usec == "true" );
+
 	passwdline cfg;
-	cfg.enabled = ( usec == "true" );
-	cfg.host = host;
-	cfg.pass = pass;
-	cfg.port = port;
-	cfg.user = user;
+	cfg.enabled = usecustom;
+	if( usecustom )
+	{
+		cfg.host = host;
+		cfg.pass = pass;
+		cfg.port = port;
+		cfg.user = user;
+	}
 
 	SmtpClientConfig scli( SASLPASSWD );
 	scli.SetConfig( cfg );
@@ -1657,6 +1663,7 @@ bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int wha
 	{
 		if( what & check.check && ! CheckArgument( cmd, check.member, check.type) )
 		{
+			logg << Logger::Debug << "Failed to verify argument "<<check.member<<lend;
 			this->SendErrorMessage(client, cmd, 400, "Missing argument");
 			return false;
 		}
