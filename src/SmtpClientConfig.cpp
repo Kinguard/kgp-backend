@@ -237,7 +237,12 @@ void Postconf::ReadConfig()
 		throw runtime_error("Unable to parse postconf output");
 	}
 
-	this->relayhost = String::Trimmed( String::Split( lines.front(),"=").back()," \t");
+	list<string> words = String::Split( lines.front(),"=");
+	if( words.size() == 2 )
+	{
+		this->relayhost = String::Trimmed( words.back()," \t");
+	}
+
 	this->enable = String::Trimmed( String::Split( lines.back(),"=").back()," \t") == "yes";
 
 #if 0

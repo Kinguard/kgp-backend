@@ -1,3 +1,9 @@
+opi-backend (0.15) vili; urgency=low
+
+  * Fix bug for empty relayhost
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 13 Aug 2014 15:44:21 +0200
+
 opi-backend (0.14) vili; urgency=low
 
   * Add email attribute to fetchmail config
