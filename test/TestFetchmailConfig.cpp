@@ -42,6 +42,7 @@ void TestFetchmailConfig::setUp()
 void TestFetchmailConfig::tearDown()
 {
 	unlink("test.fil");
+	unlink("test.fil.lnk");
 }
 
 void TestFetchmailConfig::TestBasicUsage()
@@ -72,22 +73,24 @@ void TestFetchmailConfig::TestBasicUsage()
 	CPPUNIT_ASSERT_EQUAL( (size_t)2, fc.GetAccounts("bengt").size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)4, fc.GetAccounts().size() );
 
-	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("new.host.me","my identity","Mys3cr$t P+$$w0rd","user"));
-	CPPUNIT_ASSERT_THROW( fc.AddAccount("new.host.me","my identity","Mys3cr$t P+$$w0rd","user"), runtime_error);
+	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("me@myself.me", "new.host.me","my identity","Mys3cr$t P+$$w0rd","user"));
+	CPPUNIT_ASSERT_THROW( fc.AddAccount("me@myself.me","new.host.me","my identity","Mys3cr$t P+$$w0rd","user"), runtime_error);
 	CPPUNIT_ASSERT_EQUAL( (size_t)3, fc.GetHosts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)5, fc.GetAccounts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)1, fc.GetAccounts("user").size() );
 
 	map<string,string> user;
 	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("new.host.me","my identity") );
+	CPPUNIT_ASSERT_EQUAL( string("me@myself.me"),		user["email"]);
 	CPPUNIT_ASSERT_EQUAL( string("new.host.me"),		user["host"]);
 	CPPUNIT_ASSERT_EQUAL( string("my identity"),		user["identity"]);
 	CPPUNIT_ASSERT_EQUAL( string("Mys3cr$t P+$$w0rd"),	user["password"]);
 	CPPUNIT_ASSERT_EQUAL( string("user"),				user["username"]);
 
-	CPPUNIT_ASSERT_NO_THROW( fc.UpdateAccount("new.host.me","my identity","nosecret","newuser") );
+	CPPUNIT_ASSERT_NO_THROW( fc.UpdateAccount("me@myself.me","new.host.me","my identity","nosecret","newuser") );
 
 	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("new.host.me","my identity") );
+	CPPUNIT_ASSERT_EQUAL( string("me@myself.me"),		user["email"]);
 	CPPUNIT_ASSERT_EQUAL( string("new.host.me"),	user["host"]);
 	CPPUNIT_ASSERT_EQUAL( string("my identity"),	user["identity"]);
 	CPPUNIT_ASSERT_EQUAL( string("nosecret"),		user["password"]);

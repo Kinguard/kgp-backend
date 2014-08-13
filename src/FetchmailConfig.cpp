@@ -11,29 +11,31 @@ using namespace Utils;
 FetchmailConfig::FetchmailConfig(const string &cfgpath):
 	configfile(cfgpath),
 	host("^poll\\s+(\\S+)\\s+with proto"),
-	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here")
+	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here"),
+	cfgfile(cfgpath+".lnk")
 {
 	this->ReadConfig();
 }
 
-void FetchmailConfig::AddAccount(const string &host, const string &identity, const string &password, const string &user)
+void FetchmailConfig::AddAccount(const string &email, const string &host, const string &identity, const string &password, const string &user)
 {
 	if( this->_hasuser( host, identity ) )
 	{
 		throw runtime_error("User already exists");
 	}
-
+	this->cfgfile[host+"\t"+identity] = email;
 	this->config[host][identity] = make_pair(password, user);
 
 }
 
-void FetchmailConfig::UpdateAccount(const string &host, const string &identity, const string &password, const string &user)
+void FetchmailConfig::UpdateAccount(const string &email, const string &host, const string &identity, const string &password, const string &user)
 {
 	if( ! this->_hasuser( host, identity ) )
 	{
 		throw runtime_error("User doesnt exists");
 	}
 
+	this->cfgfile[host+"\t"+identity] = email;
 	this->config[host][identity] = make_pair(password, user);
 }
 
@@ -55,6 +57,7 @@ map<string, string> FetchmailConfig::GetAccount(const string &host, const string
 	}
 
 	return {
+		{"email",		this->cfgfile[host+"\t"+identity]},
 		{"host",		host},
 		{"identity",	identity},
 		{"password",	this->config[host][identity].first},
@@ -90,7 +93,7 @@ void FetchmailConfig::DeleteAccount(const string &host, const string &identity)
 	}
 
 	this->config[host].erase(identity);
-
+	this->cfgfile.erase(host+"\t"+identity);
 	// Last identity at host?
 	if( this->config[host].size() == 0 )
 	{
@@ -156,7 +159,7 @@ void FetchmailConfig::WriteConfig()
 			   << "' here smtpaddress localdomain\n";
 		}
 	}
-
+	this->cfgfile.Sync(true, 0600);
 	File::Write( this->configfile, out.str(), 0600);
 }
 

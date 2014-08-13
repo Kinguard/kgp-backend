@@ -26,6 +26,7 @@
 #define CHK_HST 0x0080  // Check hostname
 #define CHK_IDN 0x0100  // Check identity
 #define CHK_PRT 0x0200  // Check port
+#define CHK_EML 0x0400  // Check email
 
 enum ArgCheckType{
 	STRING,
@@ -51,6 +52,7 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_HST, "hostname",		ArgCheckType::STRING },
 			{ CHK_IDN, "identity",		ArgCheckType::STRING },
 			{ CHK_PRT, "port",			ArgCheckType::STRING },
+			{ CHK_EML, "email",			ArgCheckType::STRING },
 	});
 
 // Convenience class for debug/trace
@@ -1269,6 +1271,7 @@ void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client,
 	for( auto& account: accounts )
 	{
 		Json::Value acc(Json::objectValue);
+		acc["email"] = account["email"];
 		acc["host"] = account["host"];
 		acc["identity"] = account["identity"];
 		acc["username"] = account["username"];
@@ -1300,6 +1303,7 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 	map<string,string> account = fc.GetAccount(host,id);
 
 	Json::Value ret(Json::objectValue);
+	ret["email"] = account["email"];
 	ret["host"] = account["host"];
 	ret["identity"] = account["identity"];
 	ret["username"] = account["username"];
@@ -1316,11 +1320,12 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR , cmd) )
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR  | CHK_EML , cmd) )
 	{
 		return;
 	}
 
+	string email = cmd["email"].asString();
 	string host = cmd["hostname"].asString();
 	string id = cmd["identity"].asString();
 	string pwd = cmd["password"].asString();
@@ -1328,7 +1333,7 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 
 	FetchmailConfig fc( FETCHMAILRC );
 
-	fc.AddAccount(host, id, pwd, user );
+	fc.AddAccount(email, host, id, pwd, user );
 	fc.WriteConfig();
 	restart_fetchmail();
 
@@ -1344,11 +1349,12 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR , cmd) )
+	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR | CHK_EML, cmd) )
 	{
 		return;
 	}
 
+	string email = cmd["email"].asString();
 	string host = cmd["hostname"].asString();
 	string id = cmd["identity"].asString();
 	string pwd = cmd["password"].asString();
@@ -1356,7 +1362,7 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 
 	FetchmailConfig fc( FETCHMAILRC );
 
-	fc.UpdateAccount(host, id, pwd, user );
+	fc.UpdateAccount(email, host, id, pwd, user );
 	fc.WriteConfig();
 	restart_fetchmail();
 

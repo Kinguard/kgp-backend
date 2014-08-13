@@ -6,6 +6,7 @@
 #include <string>
 
 #include <libutils/Regex.h>
+#include <libutils/ConfigFile.h>
 
 using namespace std;
 using namespace Utils;
@@ -15,8 +16,8 @@ class FetchmailConfig
 public:
 	FetchmailConfig(const string& cfgpath);
 
-	void AddAccount(const string& host, const string& identity, const string& password, const string& user);
-	void UpdateAccount(const string& host, const string& identity, const string& password, const string& user);
+	void AddAccount(const string& email, const string& host, const string& identity, const string& password, const string& user);
+	void UpdateAccount(const string& email, const string& host, const string& identity, const string& password, const string& user);
 
 	list<string> GetHosts();
 
@@ -35,6 +36,7 @@ private:
 	// <host < identity < password, user > > >
 	map<string, map<string, pair<string,string> > > config;
 	Regex host, user;
+	ConfigFile cfgfile;
 };
 
 #endif // FETCHMAILCONFIG_H
