@@ -18,6 +18,13 @@ using namespace Utils;
 using namespace Utils::Net;
 using namespace std;
 
+typedef struct _userdata
+{
+	SecopPtr	secop;
+	time_t		lastaccess;
+	bool		isadmin;
+} userdata;
+
 class OpiBackendServer: public Utils::Net::NetServer
 {
 public:
@@ -79,8 +86,15 @@ private:
 	string ExecCmd(const char *$cmd);
 
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
-	bool CheckLoggedIn(const string& username);
 	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
+
+	bool CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Value& req);
+	bool CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Json::Value& req);
+
+	bool CheckLoggedIn(const string& username);
+	bool isAdmin( const string& token);
+	bool isAdminOrUser( const string& token, const string& user);
+
 	void TouchCLient(const string& token);
 
 	Json::Value GetUser(const string& token, const string& user);
@@ -99,10 +113,10 @@ private:
 	inline const string& TokenFromUser( const string& user);
 
 	string AddUser(const string& username, SecopPtr secop);
-	// <token, last access>
-	map<string, time_t> clientaccess;
+
 	// <token, pointer to secopconnection>
-	map<string, SecopPtr> clients;
+	map<string, userdata> clients;
+
 	// <Username, token>
 	map<string, string> users;
 

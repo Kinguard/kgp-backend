@@ -197,7 +197,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 	if( this->CheckLoggedIn( username ))
 	{
 		logg << Logger::Debug << "User seems already logged in, validating anyway"<<lend;
-		SecopPtr secop = this->clients[this->users[ username ] ];
+		SecopPtr secop = this->clients[this->users[ username ] ].secop;
 
 		if( ! secop )
 		{
@@ -275,7 +275,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 {
 	ScopedLog l("Do Create user");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( !this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -290,7 +290,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string pass =		cmd["password"].asString();
 	string display =	cmd["displayname"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( ! secop->CreateUser( user, pass,display ) )
 	{
@@ -313,7 +313,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 {
 	ScopedLog l("Do Delete user");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -326,7 +326,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( ! secop->RemoveUser( user ) )
 	{
@@ -359,10 +359,15 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 		return;
 	}
 
+	if( ! this->CheckIsAdminOrUser(client, cmd) )
+	{
+		return;
+	}
+
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	vector<string> users  = secop->GetUsers();
 
@@ -391,11 +396,16 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
+	if( ! this->CheckIsAdminOrUser( client, cmd) )
+	{
+		return;
+	}
+
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 	string disp =		cmd["displayname"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( ! secop->AddAttribute(user, "displayname", disp) )
 	{
@@ -410,14 +420,14 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 {
 	ScopedLog l("Do get users");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
 
 	string token =		cmd["token"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	vector<string> usernames = secop->GetUsers();
 	Json::Value ret;
@@ -444,12 +454,17 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 		return;
 	}
 
+	if( ! this->CheckIsAdminOrUser( client, cmd ) )
+	{
+		return;
+	}
+
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 	string passw =		cmd["password"].asString();
 	string newps =		cmd["newpassword"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	list<map<string,string>>  ids = secop->GetIdentifiers( user, "opiuser");
 	if(ids.size() == 0 )
@@ -525,7 +540,7 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 {
 	ScopedLog l("Do add group");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -538,7 +553,7 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( !secop->AddGroup(group) )
 	{
@@ -553,7 +568,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Do add group member");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -567,7 +582,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	string group =	cmd["group"].asString();
 	string member =	cmd["member"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( !secop->AddGroupMember(group, member) )
 	{
@@ -595,7 +610,7 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	vector<string> members = secop->GetGroupMembers( group );
 
@@ -614,7 +629,7 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 {
 	ScopedLog l("Do remove group");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -627,7 +642,7 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( !secop->RemoveGroup(group) )
 	{
@@ -642,7 +657,7 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 {
 	ScopedLog l("Do group remove member");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -652,12 +667,11 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 	string member =	cmd["member"].asString();
 
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	if( !secop->RemoveGroupMember(group, member) )
 	{
@@ -672,7 +686,7 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 {
 	ScopedLog l("Do shutdown");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -702,7 +716,7 @@ void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json:
 
 	ScopedLog l("Get update state");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd)  || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -726,7 +740,7 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 	ScopedLog l("Set update state");
 	string doupdates = cmd["state"].asString();
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -761,7 +775,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 
 	ScopedLog l("Get backup settings");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -803,7 +817,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	string type = cmd["type"].asString();
 	string backend = cmd["location"].asString();
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -845,7 +859,7 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Get Quota");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -864,7 +878,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 {
 	ScopedLog l("Get Backup Status");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -905,7 +919,7 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Do smtp get domains");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -928,7 +942,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 {
 	ScopedLog l("Do smtp add domain");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1054,7 +1068,7 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 {
 	ScopedLog l("Do smtp delete domain");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1085,7 +1099,7 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 {
 	ScopedLog l("Do smtp get addresses");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1119,7 +1133,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Do smtp add address");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1152,7 +1166,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 {
 	ScopedLog l("Do smtp delete address");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1184,7 +1198,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 {
 	ScopedLog l("Do smtp get settings");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1207,7 +1221,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 {
 	ScopedLog l("Do smtp set settings");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
@@ -1256,7 +1270,7 @@ void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client,
 {
 	ScopedLog l("Do fetchmail get accounts");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || ! this->CheckIsAdminOrUser(client, cmd) )
 	{
 		return;
 	}
@@ -1314,7 +1328,14 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 	ret["identity"] = account["identity"];
 	ret["username"] = account["username"];
 
-	this->SendOK(client, cmd,ret);
+	if( this->isAdminOrUser(cmd["token"].asString(), account["username"]) )
+	{
+		this->SendOK(client, cmd,ret);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+	}
 }
 
 void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1336,6 +1357,12 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 	string id = cmd["identity"].asString();
 	string pwd = cmd["password"].asString();
 	string user = cmd["username"].asString();
+
+	if( ! this->isAdminOrUser(cmd["token"].asString(), user) )
+	{
+		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		return;
+	}
 
 	FetchmailConfig fc( FETCHMAILRC );
 
@@ -1365,6 +1392,13 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 	string id = cmd["identity"].asString();
 	string pwd = cmd["password"].asString();
 	string user = cmd["username"].asString();
+	string token = cmd["token"].asString();
+
+	if( ! this->isAdminOrUser( token, user) )
+	{
+		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		return;
+	}
 
 	FetchmailConfig fc( FETCHMAILRC );
 
@@ -1391,8 +1425,17 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 
 	string host = cmd["hostname"].asString();
 	string id = cmd["identity"].asString();
+	string token = cmd["token"].asString();
 
 	FetchmailConfig fc( FETCHMAILRC );
+
+	map<string,string> account = fc.GetAccount(host, id);
+
+	if( ! this->isAdminOrUser( token, account["username"] ) )
+	{
+		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		return;
+	}
 
 	fc.DeleteAccount(host, id );
 	fc.WriteConfig();
@@ -1406,7 +1449,7 @@ void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client,
 
 	ScopedLog l("Get port state");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
 		return;
 	}
@@ -1430,10 +1473,11 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
 
 	ScopedLog l("Set port state");
 
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
 		return;
 	}
+
 	string port = "ports["+cmd["port"].asString()+"]";
 	string state;
 	if(cmd["set_open"].asBool())
@@ -1495,13 +1539,13 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 
 	string token = req["token"].asString();
 
-	if( this->clientaccess.find( token ) == this->clientaccess.end() )
+	if( this->clients.find( token ) == this->clients.end() )
 	{
 		this->SendErrorMessage(client, req, 401, "Unauthorized");
 		return false;
 	}
 
-	if( this->clientaccess[token]+SESSION_TIMEOUT  < time(nullptr) )
+	if( this->clients[token].lastaccess+SESSION_TIMEOUT  < time(nullptr) )
 	{
 		this->SendErrorMessage(client, req, 401, "Unauthorized");
 		return false;
@@ -1512,17 +1556,61 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 	return true;
 }
 
+// Assumes that check for logged in has been performed
+bool OpiBackendServer::CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Value &req)
+{
+	string token = req["token"].asString();
+
+	if( ! this->isAdmin( token ) )
+	{
+		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		return false;
+	}
+	return true;
+}
+
+// Assumes that check for logged in has been performed
+bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Json::Value &req)
+{
+	string token = req["token"].asString();
+
+	// If no username, check for admin only
+	if( ! req.isMember("username") )
+	{
+		return this->CheckIsAdmin(client,req);
+	}
+
+	string user = req["username"].asString();
+
+	if( ! this->isAdminOrUser( token, user ) )
+	{
+		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		return false;
+	}
+	return true;
+}
+
+bool OpiBackendServer::isAdmin(const string &token)
+{
+	return this->clients[token].isadmin;
+}
+
+bool OpiBackendServer::isAdminOrUser(const string &token, const string &user)
+{
+	return this->isAdmin( token ) || ( this->users[user] == token );
+}
+
 void OpiBackendServer::TouchCLient(const string &token)
 {
-	if( this->clientaccess.find(token) != this->clientaccess.end() )
+	if( this->clients.find(token) != this->clients.end() )
 	{
-		this->clientaccess[token]=time(nullptr);
+		this->clients[token].lastaccess = time(nullptr);
 	}
 }
 
 Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
 {
-	SecopPtr secop = this->clients[token];
+	SecopPtr secop = this->clients[token].secop;
 
 	Json::Value ret;
 	ret["username"] = user;
@@ -1612,9 +1700,15 @@ string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
 {
 	//TODO: Perhaps something a bit more elaborate token?
 	string token = String::UUID();
+
+
+	vector<string> members = secop->GetGroupMembers( "admin" );
+	bool isadmin = find(members.begin(), members.end(), username ) != members.end();
+
 	this->users[username] = token;
-	this->clients[token] = secop;
-	this->clientaccess[token] = time(nullptr);
+	this->clients[token].secop = secop;
+	this->clients[token].isadmin = isadmin;
+	this->clients[token].lastaccess = time(nullptr);
 
 	return token;
 }
