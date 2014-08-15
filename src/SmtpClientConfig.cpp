@@ -70,16 +70,22 @@ void SmtpClientConfig::SetConfig(const passwdline &cfg)
 {
 
 	stringstream host;
-	host << "["<<cfg.host<<"]";
-	if( cfg.port != "" )
+	// Make sure we have no reminder config
+	this->passwd.empty();
+
+	if( cfg.host != "")
 	{
-		host << ":" << cfg.port;
+		host << "["<<cfg.host<<"]";
+		if( cfg.port != "" )
+		{
+			host << ":" << cfg.port;
+		}
+
+		this->passwd[host.str()]=cfg;
 	}
 
 	this->postconf->setEnable( cfg.enabled );
 	this->postconf->setRelayhost( host.str() );
-
-	this->passwd[host.str()]=cfg;
 }
 
 void SmtpClientConfig::dump()
