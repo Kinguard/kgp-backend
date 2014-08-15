@@ -131,6 +131,8 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	// Setup mail paths etc
 	postfix_fixpaths();
 
+	// Initialize time for last reap
+	this->lastreap = time(NULL);
 }
 
 void OpiBackendServer::Dispatch(SocketPtr con)
@@ -172,6 +174,10 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 	{
 		logg << Logger::Debug << "Caught exception on socket read ("<<e.what()<<")"<<lend;
 	}
+
+	// Check and possibly remove clients not active
+	// This is ok since we are guaranteed not to process any client now
+	this->ReapClients();
 
 	this->decreq();
 
@@ -1606,6 +1612,61 @@ void OpiBackendServer::TouchCLient(const string &token)
 	{
 		this->clients[token].lastaccess = time(nullptr);
 	}
+}
+
+void OpiBackendServer::ReapClient(const string &token)
+{
+	string user = this->UserFromToken( token );
+
+	if( this->users.find(user) == this->users.end() )
+	{
+		logg << Logger::Error << "User token not found to delete"<<lend;
+		return;
+	}
+
+	if( this->clients.find(token) == this->clients.end() )
+	{
+		logg << Logger::Error << "Client to delete not found"<<lend;
+		return;
+	}
+
+	this->users.erase(user);
+	this->clients.erase(token);
+}
+
+void OpiBackendServer::ReapClients()
+{
+	// Only reap once a minute
+	if( this->lastreap + 60 > time(NULL) )
+	{
+		return;
+	}
+
+	logg << Logger::Debug << "Reap clients"<<lend;
+
+	list <string> toreap;
+
+	for( auto client: this->clients )
+	{
+		string token = client.first;
+		userdata data = client.second;
+
+		if( data.lastaccess + SESSION_TIMEOUT < time(NULL) )
+		{
+			// Reap this client
+			toreap.push_back( token );
+		}
+
+	}
+
+	logg << Logger::Debug << "About to reap "<<toreap.size() << " clients of "<< this->clients.size() << " active"<<lend;
+
+	for( const string& client: toreap )
+	{
+		this->ReapClient( client );
+	}
+
+	this->lastreap = time(NULL);
 }
 
 Json::Value OpiBackendServer::GetUser(const string &token, const string &user)

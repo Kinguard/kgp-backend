@@ -95,7 +95,12 @@ private:
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
 
+	// Lifecycle management
 	void TouchCLient(const string& token);
+	time_t lastreap;
+	void ReapClient(const string& token);
+	// ONLY call this when not processing a request!
+	void ReapClients();
 
 	Json::Value GetUser(const string& token, const string& user);
 
