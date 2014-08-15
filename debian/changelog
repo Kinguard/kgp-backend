@@ -1,3 +1,10 @@
+opi-backend (0.18) vili; urgency=low
+
+  * Tighten authorization checks
+  * Implement reaping of old unused client connections
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 15 Aug 2014 10:31:57 +0200
+
 opi-backend (0.17) vili; urgency=low
 
   * Only set arguments to smtp-setsettings if usecustom
