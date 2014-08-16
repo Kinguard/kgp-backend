@@ -42,6 +42,7 @@ public:
 	bool UpdateUserPassword(const string& user, const string& pwd);
 	bool RemoveUser(const string& user);
 	vector<string> GetUsers();
+	vector<string> GetUserGroups(const string &user);
 
 	bool AddAttribute(const string& user, const string& attr, const string& value);
 	bool RemoveAttribute(const string& user, const string& attr);

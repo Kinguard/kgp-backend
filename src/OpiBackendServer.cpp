@@ -89,6 +89,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
 	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
 	this->actions["getusers"]=&OpiBackendServer::DoGetUsers;
+	this->actions["getusergroups"]=&OpiBackendServer::DoGetUserGroups;
 
 	this->actions["groupsget"]=&OpiBackendServer::DoGetGroups;
 	this->actions["groupadd"]=&OpiBackendServer::DoAddGroup;
@@ -431,9 +432,9 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-	string token =		cmd["token"].asString();
+	SecopPtr secop = this->SecopFromCmd(cmd);
 
-	SecopPtr secop = this->clients[token].secop;
+	string token = cmd["token"].asString();
 
 	vector<string> usernames = secop->GetUsers();
 	Json::Value ret;
@@ -441,6 +442,36 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 	for(auto user: usernames)
 	{
 		ret["users"].append( this->GetUser(token, user) );
+	}
+
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do get user groups");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+	{
+		return;
+	}
+
+	string user =		cmd["username"].asString();
+
+	SecopPtr secop = this->SecopFromCmd(cmd);
+
+	vector<string> groups = secop->GetUserGroups( user );
+
+	Json::Value ret;
+	ret["groups"]=Json::arrayValue;
+	for(auto group: groups)
+	{
+		ret["groups"].append( group );
 	}
 
 	this->SendOK(client, cmd, ret);
@@ -1755,6 +1786,11 @@ string OpiBackendServer::UserFromToken(const string &token)
 		}
 	}
 	return "";
+}
+
+SecopPtr OpiBackendServer::SecopFromCmd(Json::Value &cmd)
+{
+	return  this->clients[ cmd["token"].asString() ].secop;
 }
 
 string OpiBackendServer::AddUser(const string &username, SecopPtr secop)

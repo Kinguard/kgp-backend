@@ -43,6 +43,7 @@ private:
 	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetUserGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUpdateUserPassword(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
 	void DoGetGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
@@ -116,6 +117,7 @@ private:
 
 	inline string UserFromToken( const string& token);
 	inline const string& TokenFromUser( const string& user);
+	inline SecopPtr SecopFromCmd(Json::Value& cmd);
 
 	string AddUser(const string& username, SecopPtr secop);
 

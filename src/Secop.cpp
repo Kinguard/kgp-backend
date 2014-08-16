@@ -143,6 +143,30 @@ vector<string> Secop::GetUsers()
 	return users;
 }
 
+vector<string> Secop::GetUserGroups(const string& user)
+{
+	Json::Value cmd(Json::objectValue);
+
+	cmd["cmd"]		= "getusergroups";
+	cmd["username"]	= user;
+
+	Json::Value rep = this->DoCall(cmd);
+
+	vector<string> groups;
+	if( this->CheckReply(rep) )
+	{
+		for(auto x: rep["groups"])
+		{
+			groups.push_back(x.asString() );
+		}
+	}
+	else
+	{
+		throw_error(rep);
+	}
+	return groups;
+}
+
 bool Secop::AddAttribute(const string &user, const string &attr, const string &value)
 {
 	Json::Value cmd(Json::objectValue);
