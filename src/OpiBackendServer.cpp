@@ -1563,7 +1563,21 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 
 bool OpiBackendServer::CheckLoggedIn(const string &username)
 {
-	return this->users.find(username) != this->users.end();
+	bool found = this->users.find(username) != this->users.end();
+	if( ! found )
+	{
+		return false;
+	}
+
+	// Check session
+	string token = this->TokenFromUser( username );
+
+	if( this->clients[token].lastaccess+SESSION_TIMEOUT  < time(nullptr) )
+	{
+		return false;
+	}
+
+	return true;
 }
 
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
@@ -1786,6 +1800,11 @@ string OpiBackendServer::UserFromToken(const string &token)
 		}
 	}
 	return "";
+}
+
+const string &OpiBackendServer::TokenFromUser(const string &user)
+{
+	return this->users[user];
 }
 
 SecopPtr OpiBackendServer::SecopFromCmd(Json::Value &cmd)
