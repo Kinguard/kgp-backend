@@ -1,3 +1,9 @@
+opi-backend (0.91) vili; urgency=low
+
+  * Change method of json parsing, limiting input length.
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 19 Aug 2014 09:46:10 +0200
+
 opi-backend (0.90) vili; urgency=low
 
   * Implement get user groups

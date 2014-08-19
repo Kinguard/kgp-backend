@@ -152,7 +152,7 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 		{
 			logg << "Read request of socket"<<lend;
 			Json::Value req;
-			if( reader.parse(buf, req) )
+			if( reader.parse(buf, buf+rd, req) )
 			{
 				if( req.isMember("cmd") && req["cmd"].isString() )
 				{
