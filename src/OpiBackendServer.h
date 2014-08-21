@@ -11,12 +11,14 @@
 
 #include <libutils/NetServer.h>
 
-#include "Secop.h"
+#include <libopi/Secop.h>
+
 #include "Config.h"
 
 using namespace Utils;
 using namespace Utils::Net;
 using namespace std;
+using namespace OPI;
 
 typedef struct _userdata
 {
@@ -82,6 +84,7 @@ private:
 	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
 	string ExecCmd(const char *$cmd);

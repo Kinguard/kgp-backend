@@ -2,8 +2,7 @@ project(opi-backend)
 cmake_minimum_required(VERSION 2.8)
 
 include( FindPkgConfig )
-pkg_check_modules ( LIBUTILS REQUIRED libutils>=1.0 )
-pkg_check_modules ( LIBJSONCPP REQUIRED libjsoncpp>=1.0 )
+pkg_check_modules ( LIBOPI REQUIRED libopi>=1.0 )
 
 set (OPIB_VERSION_MAJOR 1)
 set (OPIB_VERSION_MINOR 0)
@@ -31,13 +30,13 @@ add_subdirectory( test )
 aux_source_directory(. SRC_LIST)
 
 include_directories (
-		"${LIBJSONCPP_INCLUDE_DIRS}"
+		"${LIBOPI_INCLUDE_DIRS}"
 	)
 
 add_definitions( -std=c++11 )
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
-target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBJSONCPP_LDFLAGS} ${LIBUTILS_LDFLAGS} )
+target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} )
 
 enable_testing()
 add_test( NAME TestApp COMMAND testapp )
