@@ -10,6 +10,8 @@
 #include <libutils/ConfigFile.h>
 #include <libutils/UserGroups.h>
 
+#include <libopi/DnsServer.h>
+
 #include <algorithm>
 
 /*
@@ -128,6 +130,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networkgetportstatus"]=&OpiBackendServer::DoNetworkGetPortStatus;
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
+	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
 
 	// Setup mail paths etc
 	postfix_fixpaths();
@@ -1557,6 +1560,49 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 	else
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
+	}
+}
+
+void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Set OPI name");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST , cmd) )
+	{
+		return;
+	}
+
+	if( ! File::FileExists( SYS_INFO ) )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
+		return;
+	}
+
+	ConfigFile c(SYS_INFO);
+	string unit_id = c.ValueOrDefault("unit_id");
+
+	string hostname = cmd["hostname"].asString();
+
+	if( unit_id == "" )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to retrieve unit id");
+		return;
+	}
+
+	OPI::DnsServer dns;
+
+	if( dns.UpdateDynDNS(unit_id, hostname) )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 400, "Failed to set opi name");
 	}
 }
 

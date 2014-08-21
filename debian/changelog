@@ -1,3 +1,10 @@
+opi-backend (0.92) vili; urgency=low
+
+  * Implement set opiname
+  * Use libopi
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 21 Aug 2014 16:06:23 +0200
+
 opi-backend (0.91) vili; urgency=low
 
   * Change method of json parsing, limiting input length.
