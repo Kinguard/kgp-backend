@@ -1287,7 +1287,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	bool usecustom = ( usec == "true" );
 
 	passwdline cfg;
-	cfg.enabled = usecustom;
+	cfg.enabled = ( (user != "") || ( pass != "") );
 	if( usecustom )
 	{
 		cfg.host = host;

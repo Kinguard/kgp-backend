@@ -1,3 +1,9 @@
+opi-backend (0.93) vili; urgency=low
+
+  * Fix bug sasl being enabled without password and user
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 22 Aug 2014 10:08:09 +0200
+
 opi-backend (0.92) vili; urgency=low
 
   * Implement set opiname
