@@ -1,3 +1,9 @@
+opi-backend (0.94) vili; urgency=low
+
+  * Get certificate as well when changing opi-name
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 22 Aug 2014 16:08:51 +0200
+
 opi-backend (0.93) vili; urgency=low
 
   * Fix bug sasl being enabled without password and user

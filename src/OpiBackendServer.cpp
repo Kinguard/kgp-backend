@@ -11,6 +11,8 @@
 #include <libutils/UserGroups.h>
 
 #include <libopi/DnsServer.h>
+#include <libopi/AuthServer.h>
+#include <libopi/CryptoHelper.h>
 
 #include <algorithm>
 
@@ -1596,14 +1598,51 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	OPI::DnsServer dns;
 
-	if( dns.UpdateDynDNS(unit_id, hostname) )
-	{
-		this->SendOK(client, cmd);
-	}
-	else
+	if( !dns.UpdateDynDNS(unit_id, hostname) )
 	{
 		this->SendErrorMessage( client, cmd, 400, "Failed to set opi name");
+		return;
 	}
+
+	string token = this->BackendLogin( unit_id );
+	if( token == "" )
+	{
+		this->SendErrorMessage( client, cmd, 400, "Failed to authenticate");
+		return;
+	}
+
+	if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, hostname+".op-i.me", "OPI") )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
+		return;
+	}
+
+	string csr = File::GetContentAsString(CSR_PATH, true);
+
+	AuthServer s(unit_id);
+
+	int resultcode;
+	Json::Value ret;
+	tie(resultcode, ret) = s.GetCertificate(csr, token );
+
+	if( resultcode != 200 )
+	{
+		this->SendErrorMessage( client, cmd, 400, "Failed get signed certificate");
+		return;
+	}
+
+	if( ! ret.isMember("cert") || ! ret["cert"].isString() )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Malformed reply from server");
+		return;
+	}
+
+	// Make sure we have no symlinked tempcert in place
+	unlink( CERT_PATH );
+
+	File::Write( CERT_PATH, ret["cert"].asString(), 0644);
+
+	this->SendOK(client, cmd);
 }
 
 
@@ -1695,6 +1734,74 @@ bool OpiBackendServer::isAdmin(const string &token)
 bool OpiBackendServer::isAdminOrUser(const string &token, const string &user)
 {
 	return this->isAdmin( token ) || ( this->users[user] == token );
+}
+
+string OpiBackendServer::BackendLogin(const string &unit_id)
+{
+	AuthServer s( unit_id);
+
+	CryptoHelper::RSAWrapper c;
+	Secop secop;
+	secop.SockAuth();
+
+	list<map<string,string>> ids =  secop.AppGetIdentifiers("op-backend");
+
+	if( ids.size() == 0 )
+	{
+		logg << Logger::Error << "Failed to get keys from secop"<<lend;
+		return "";
+	}
+
+	bool found = false;
+	for(auto id : ids )
+	{
+		if( id.find("type") != id.end() )
+		{
+			if( id["type"] == "backendkeys" )
+			{
+				// Key found
+				c.LoadPrivKeyFromDER( CryptoHelper::Base64Decode( id["privkey"]) );
+				c.LoadPubKeyFromDER( CryptoHelper::Base64Decode( id["pubkey"]) );
+				found = true;
+				break;
+			}
+		}
+	}
+
+	if( ! found )
+	{
+		logg << Logger::Error << "failed to load keys from secop"<<lend;
+		return "";
+	}
+
+	string challenge;
+	int resultcode;
+	tie(resultcode,challenge) = s.GetChallenge();
+
+	if( resultcode != 200 )
+	{
+		logg << Logger::Error << "Unknown reply of server "<<resultcode<< lend;
+		return "";
+	}
+
+	string signedchallenge = CryptoHelper::Base64Encode( c.SignMessage( challenge ) );
+
+	Json::Value rep;
+	tie(resultcode, rep) = s.SendSignedChallenge( signedchallenge );
+
+	if( resultcode != 200 )
+	{
+		logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
+		return "";
+	}
+
+	if( rep.isMember("token") && rep["token"].isString() )
+	{
+		return rep["token"].asString();
+	}
+
+	return "";
+
 }
 
 void OpiBackendServer::TouchCLient(const string &token)

@@ -99,6 +99,8 @@ private:
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
 
+	string BackendLogin(const string& unit_id);
+
 	// Lifecycle management
 	void TouchCLient(const string& token);
 	time_t lastreap;
