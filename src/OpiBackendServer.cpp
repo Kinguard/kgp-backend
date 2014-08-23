@@ -317,6 +317,15 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	mmf.SetAddress("localdomain", user, user);
 	mmf.WriteConfig();
 
+	// Add user to opi-domain
+	ConfigFile c(SYS_INFO);
+	string opiname = c.ValueOrDefault("opi_name");
+
+	MailConfig mc;
+	mc.ReadConfig();
+	mc.SetAddress(opiname+"op-i.me",user,user);
+	mc.WriteConfig();
+
 	update_postfix();
 
 	this->SendOK(client, cmd);
@@ -347,11 +356,20 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	// Add remove user from local mail
+	// Remove user from local mail
 	MailMapFile mmf( LOCAL_MAILFILE );
 	mmf.ReadConfig();
 	mmf.DeleteAddress("localdomain", user);
 	mmf.WriteConfig();
+
+	// Remove user from opi-domain
+	ConfigFile c(SYS_INFO);
+	string opiname = c.ValueOrDefault("opi_name");
+
+	MailConfig mc;
+	mc.ReadConfig();
+	mc.DeleteAddress(opiname+"op-i.me",user);
+	mc.WriteConfig();
 
 	update_postfix();
 
@@ -1589,6 +1607,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	ConfigFile c(SYS_INFO);
 	string unit_id = c.ValueOrDefault("unit_id");
 
+	string oldopiname = c.ValueOrDefault("opi_name");
 	string hostname = cmd["hostname"].asString();
 
 	if( unit_id == "" )
@@ -1648,10 +1667,15 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	/* Update postfix with new "hostname" */
 	File::Write("/etc/mailname", hostname+".op-i.me", 0644);
 
+	MailConfig mc;
+	mc.ReadConfig();
+	mc.ChangeDomain(oldopiname,hostname);
+	mc.WriteConfig();
+
 	this->SendOK(client, cmd);
 
 	/* Restart related services */
-	ServiceHelper::Reload( "postfix" );
+	update_postfix();
 
 	ServiceHelper::Stop("nginx");
 	ServiceHelper::Start("nginx");

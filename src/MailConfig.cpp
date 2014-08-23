@@ -144,6 +144,29 @@ void MailMapFile::WriteConfig()
 	}
 }
 
+void MailMapFile::ChangeDomain(const string &from, const string &to)
+{
+	if( from =="" || to == "" )
+	{
+		throw runtime_error("Missing argumet");
+	}
+
+	if( this->config.find(from) == this->config.end() )
+	{
+		throw runtime_error("Domain not found");
+	}
+
+	if( this->config.find( to ) != this->config.end() )
+	{
+		throw runtime_error("Target domain exists");
+	}
+
+	map<string,string> domusers = this->config[from];
+
+	this->config.erase(from);
+	this->config[to] = domusers;
+}
+
 bool MailMapFile::hasAddress(const string &domain, const string &address)
 {
 	return this->hasDomain(domain) && ( this->config[domain].find(address) != this->config[domain].end() );

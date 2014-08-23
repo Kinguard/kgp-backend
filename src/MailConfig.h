@@ -21,6 +21,8 @@ public:
 	virtual void ReadConfig();
 	virtual void WriteConfig();
 
+	virtual void ChangeDomain(const string& from, const string& to);
+
 	void SetAddress(const string& domain, const string& address, const string& user);
 	void DeleteAddress(const string& domain, const string& address);
 	list<tuple<string,string>> GetAddresses(const string& domain);
@@ -42,12 +44,12 @@ public:
 	MailConfig(const string& aliasfile=ALIASES,const string& domainfile=DOMAINFILE);
 
 	virtual void ReadConfig();
+	virtual void WriteConfig();
 
 	void AddDomain(const string& domain);
 	void DeleteDomain(const string& domain);
 	list<string> GetDomains();
 
-	virtual void WriteConfig();
 
 	virtual ~MailConfig();
 private:

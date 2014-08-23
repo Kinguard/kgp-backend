@@ -1,3 +1,9 @@
+opi-backend (0.96) vili; urgency=low
+
+  * Add address to opidomain for newly created users
+
+ -- Tor Krill <tor@openproducts.se>  Sat, 23 Aug 2014 16:25:41 +0200
+
 opi-backend (0.95) vili; urgency=low
 
   * Restart Nginx after new cert installed

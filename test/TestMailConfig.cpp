@@ -1,5 +1,6 @@
 
 #include <fstream>
+#include <algorithm>
 
 #include "Config.h"
 
@@ -23,6 +24,12 @@ void TestMailConfig::setUp()
 	{
 		ofstream of("ok.fil");
 		of << "test@kalle.com\ttest/mail/\n";
+		of.close();
+	}
+
+	{
+		ofstream of("domains");
+		of << "kalle.com"<<endl;
 		of.close();
 	}
 
@@ -137,4 +144,51 @@ void TestMailConfig::TestAddress()
 	string add, usr;
 	tie(add,usr) = adrs.front();
 	CPPUNIT_ASSERT_EQUAL(string("bengt"), add);
+}
+
+void TestMailConfig::TestChange()
+{
+	MailConfig mc("ok.fil","domains");
+	CPPUNIT_ASSERT_NO_THROW( mc.ReadConfig());
+
+	if( 0 ){
+		list<string> doms = mc.GetDomains();
+		for(auto x: doms) cout << x<<endl;
+		list<tuple<string, string> > addresses = mc.GetAddresses("kalle.com");
+		for(tuple<string,string> adress: addresses )
+		{
+			cout << get<0>(adress) <<" "<< get<1>(adress)<< endl;
+		}
+	}
+
+	CPPUNIT_ASSERT_THROW( mc.ChangeDomain("none","none"), runtime_error);
+	CPPUNIT_ASSERT_THROW( mc.ChangeDomain("kalle.com","kalle.com"), runtime_error);
+	CPPUNIT_ASSERT_THROW( mc.ChangeDomain("",""), runtime_error);
+	CPPUNIT_ASSERT_THROW( mc.ChangeDomain("","kalle.com"), runtime_error);
+	CPPUNIT_ASSERT_THROW( mc.ChangeDomain("kalle.com",""), runtime_error);
+
+	CPPUNIT_ASSERT_NO_THROW( mc.ChangeDomain("kalle.com","hobbe.com"));
+	mc.SetAddress("hobbe.com","kalle","test");
+	mc.WriteConfig();
+	mc.ReadConfig();
+	CPPUNIT_ASSERT_THROW( mc.GetAddresses("kalle.com"), runtime_error );
+	CPPUNIT_ASSERT_NO_THROW( mc.GetAddresses("hobbe.com") );
+	CPPUNIT_ASSERT_NO_THROW( mc.ChangeDomain("hobbe.com","kalle.com"));
+	CPPUNIT_ASSERT_THROW( mc.GetAddresses("hobbe.com"), runtime_error );
+	CPPUNIT_ASSERT_NO_THROW( mc.GetAddresses("kalle.com") );
+	mc.WriteConfig();
+	mc.ReadConfig();
+	CPPUNIT_ASSERT_NO_THROW( mc.ChangeDomain("kalle.com","hobbe.com"));
+
+	list<tuple<string, string> > addresses = mc.GetAddresses("hobbe.com");
+	CPPUNIT_ASSERT( find( addresses.begin(), addresses.end(), tuple<string,string>("kalle","test")  ) != addresses.end() );
+	CPPUNIT_ASSERT( find( addresses.begin(), addresses.end(), tuple<string,string>("test","test")  ) != addresses.end() );
+
+	if(0){
+		list<tuple<string, string> > addresses = mc.GetAddresses("hobbe.com");
+		for(tuple<string,string> adress: addresses )
+		{
+			cout << get<0>(adress) <<" "<< get<1>(adress)<< endl;
+		}
+	}
 }

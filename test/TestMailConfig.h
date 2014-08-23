@@ -8,6 +8,7 @@ class TestMailConfig: public CppUnit::TestFixture
 	CPPUNIT_TEST_SUITE( TestMailConfig );
 	CPPUNIT_TEST( TestDomain );
 	CPPUNIT_TEST( TestAddress  );
+	CPPUNIT_TEST( TestChange  );
 	CPPUNIT_TEST_SUITE_END();
 public:
 	void setUp();
@@ -15,6 +16,7 @@ public:
 
 	void TestDomain();
 	void TestAddress();
+	void TestChange();
 };
 
 #endif /* TESTMAILCONFIG_H_ */
