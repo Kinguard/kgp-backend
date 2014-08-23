@@ -13,6 +13,7 @@
 #include <libopi/DnsServer.h>
 #include <libopi/AuthServer.h>
 #include <libopi/CryptoHelper.h>
+#include <libopi/ServiceHelper.h>
 
 #include <algorithm>
 
@@ -1596,6 +1597,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
+	/* Try update DNS, i.e. reserve name */
 	OPI::DnsServer dns;
 
 	if( !dns.UpdateDynDNS(unit_id, hostname) )
@@ -1604,6 +1606,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
+	/* Get a signed certificate for the new name */
 	string token = this->BackendLogin( unit_id );
 	if( token == "" )
 	{
@@ -1642,7 +1645,16 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	File::Write( CERT_PATH, ret["cert"].asString(), 0644);
 
+	/* Update postfix with new "hostname" */
+	File::Write("/etc/mailname", hostname+".op-i.me", 0644);
+
 	this->SendOK(client, cmd);
+
+	/* Restart related services */
+	ServiceHelper::Reload( "postfix" );
+
+	ServiceHelper::Stop("nginx");
+	ServiceHelper::Start("nginx");
 }
 
 

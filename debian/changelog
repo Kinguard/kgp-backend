@@ -1,3 +1,10 @@
+opi-backend (0.95) vili; urgency=low
+
+  * Restart Nginx after new cert installed
+  * Update mailname on new opi-name
+
+ -- Tor Krill <tor@openproducts.se>  Sat, 23 Aug 2014 14:01:34 +0200
+
 opi-backend (0.94) vili; urgency=low
 
   * Get certificate as well when changing opi-name
