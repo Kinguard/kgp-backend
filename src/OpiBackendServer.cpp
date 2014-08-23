@@ -323,7 +323,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.SetAddress(opiname+"op-i.me",user,user);
+	mc.SetAddress(opiname+".op-i.me",user,user);
 	mc.WriteConfig();
 
 	update_postfix();
@@ -368,7 +368,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.DeleteAddress(opiname+"op-i.me",user);
+	mc.DeleteAddress(opiname+".op-i.me",user);
 	mc.WriteConfig();
 
 	update_postfix();
