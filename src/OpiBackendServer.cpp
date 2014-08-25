@@ -350,6 +350,12 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
+	if( user == this->UserFromToken( token ) )
+	{
+		this->SendErrorMessage(client, cmd, 403, "Not allowed");
+		return;
+	}
+
 	SecopPtr secop = this->clients[token].secop;
 
 	if( ! secop->RemoveUser( user ) )
