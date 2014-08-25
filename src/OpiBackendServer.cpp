@@ -627,6 +627,26 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	this->SendOK(client, cmd);
 }
 
+
+static bool addusertomailadmin( const string& user )
+{
+	try
+	{
+		MailAliasFile mf( VIRTUAL_ALIASES );
+
+		mf.AddUser("/^postmaster@/",user+"@localdomain");
+		mf.AddUser("/^root@/",user+"@localdomain");
+
+		mf.WriteConfig();
+
+		ServiceHelper::Reload("postfix");
+	}
+	catch( runtime_error& err )
+	{
+		logg << Logger::Error << "Failed to add user to adminmail" << err.what()<<lend;
+	}
+}
+
 void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do add group member");
@@ -651,6 +671,11 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
+	}
+
+	if( group == "admin" )
+	{
+		addusertomailadmin(member);
 	}
 
 	this->SendOK(client, cmd);
@@ -716,6 +741,25 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	this->SendOK(client, cmd);
 }
 
+static bool removeuserfrommailadmin( const string& user )
+{
+	try
+	{
+		MailAliasFile mf( VIRTUAL_ALIASES );
+
+		mf.RemoveUser("/^postmaster@/",user+"@localdomain");
+		mf.RemoveUser("/^root@/",user+"@localdomain");
+
+		mf.WriteConfig();
+
+		ServiceHelper::Reload("postfix");
+	}
+	catch( runtime_error& err )
+	{
+		logg << Logger::Error << "Failed to remove user from adminmail" << err.what()<<lend;
+	}
+}
+
 void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do group remove member");
@@ -740,6 +784,11 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
+	}
+
+	if( group == "admin" )
+	{
+		removeuserfrommailadmin( user );
 	}
 
 	this->SendOK(client, cmd);

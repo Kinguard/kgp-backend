@@ -2,6 +2,7 @@
 #include <sstream>
 
 #include <stdexcept>
+#include <algorithm>
 
 MailConfig::MailConfig(const string &aliasfile, const string &domainfile)
 	: MailMapFile(aliasfile), domainfile(domainfile)
@@ -211,6 +212,154 @@ list<tuple<string, string> > MailMapFile::GetAddresses(const string &domain)
 }
 
 MailMapFile::~MailMapFile()
+{
+
+}
+
+
+MailAliasFile::MailAliasFile(const string &file): filename(file)
+{
+	this->ReadConfig();
+}
+
+void MailAliasFile::ReadConfig()
+{
+	this->config.clear();
+
+	// Read aliases
+	list<string> lines = File::GetContent( this->filename);
+
+	for( string line: lines)
+	{
+		line = String::Trimmed(line," ");
+
+		// Skip empty lines and comments
+		if( line.size() == 0 || line[0]=='#' )
+		{
+			continue;
+		}
+
+		list<string> parts = String::Split(line, "\t");
+		if( parts.size() == 2 )
+		{
+			string email=parts.front();
+			string users =parts.back();
+
+			list<string> userparts = String::Split(users,",");
+			for( auto user: userparts)
+			{
+				this->config[email].push_back(user);
+			}
+		}
+		else
+		{
+			throw runtime_error("Malformed syntax entry in alias file");
+		}
+	}
+}
+
+void MailAliasFile::WriteConfig()
+{
+	stringstream aliases;
+
+	for(auto entries: this->config )
+	{
+		aliases << entries.first << "\t";
+		bool first = true;
+		for(auto user: entries.second)
+		{
+			if( ! first )
+			{
+				aliases << ",";
+			}
+			first = false;
+			aliases << user;
+		}
+		aliases<<endl;
+	}
+
+	if( this->filename != "" )
+	{
+		File::Write(this->filename, aliases.str(), 0640 );
+	}
+}
+
+list<string> MailAliasFile::GetUsers(const string &alias)
+{
+	if( this->config.find( alias ) == this->config.end() )
+	{
+		throw runtime_error( "No such alias" );
+	}
+	return this->config[alias];
+}
+
+list<string> MailAliasFile::GetAliases()
+{
+	list<string> ret;
+	for( auto alias: this->config )
+	{
+		ret.push_back( alias.first );
+	}
+	return ret;
+}
+
+void MailAliasFile::AddUser(const string &alias, const string &user)
+{
+	if( this->config.find(alias) != this->config.end() )
+	{
+		if( find( this->config[alias].begin(), this->config[alias].end(), user) != this->config[alias].end() )
+		{
+			// User exists, nothing needs to be done
+			return;
+		}
+	}
+	this->config[alias].push_back(user);
+}
+
+void MailAliasFile::RemoveUser(const string &alias, const string &user)
+{
+	if( this->config.find(alias) == this->config.end() )
+	{
+		throw runtime_error("No such alias");
+	}
+
+	if( find( this->config[alias].begin(), this->config[alias].end(), user) == this->config[alias].end() )
+	{
+		throw runtime_error("No such user");
+	}
+
+	list<string> newlist;
+	for( const string& auser: this->config[alias] )
+	{
+		if( user != auser)
+		{
+			newlist.push_back( auser );
+		}
+	}
+	if( newlist.size() == 0)
+	{
+		this->config.erase(alias);
+	}
+	else
+	{
+		this->config[alias] = newlist;
+	}
+}
+
+void MailAliasFile::Dump()
+{
+	for( auto alias: this->config )
+	{
+		cout << alias.first << ":";
+		for( auto user: alias.second )
+		{
+			cout  << " "<< user;
+		}
+		cout << endl;
+	}
+}
+
+MailAliasFile::~MailAliasFile()
 {
 
 }

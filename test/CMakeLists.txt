@@ -4,6 +4,7 @@ set( testapp_src
 	test.cpp
 	TestMailConfig.cpp
 	TestFetchmailConfig.cpp
+	TestMailAliasFile.cpp
 	TestSmtpClient.cpp
 	)
 

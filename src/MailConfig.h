@@ -13,6 +13,27 @@ using namespace Utils;
 
 #include "Config.h"
 
+class MailAliasFile
+{
+public:
+	MailAliasFile(const string& file);
+
+	void ReadConfig();
+	void WriteConfig();
+
+	list<string> GetUsers( const string& alias );
+	list<string> GetAliases( );
+	void AddUser(const string& alias, const string& user);
+	void RemoveUser(const string& alias, const string& user);
+
+	void Dump();
+
+	virtual ~MailAliasFile();
+protected:
+	string filename;
+	map<string,list<string> > config;
+};
+
 class MailMapFile
 {
 public:
