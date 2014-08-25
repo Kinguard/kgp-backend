@@ -62,7 +62,7 @@ map<string, string> FetchmailConfig::GetAccount(const string &host, const string
 		{"identity",	identity},
 		{"password",	this->config[host][identity].password},
 		{"username",	this->config[host][identity].user},
-		{"ssl",	this->config[host][identity].use_ssl?"true":"false"},
+		{"ssl",			this->config[host][identity].use_ssl?"true":"false"},
 	};
 
 }
