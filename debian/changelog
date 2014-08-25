@@ -1,3 +1,9 @@
+opi-backend (0.97) vili; urgency=low
+
+  * Implement SSL usage on fetchmail
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 25 Aug 2014 14:06:01 +0200
+
 opi-backend (0.96) vili; urgency=low
 
   * Add address to opidomain for newly created users
