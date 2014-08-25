@@ -1,3 +1,12 @@
+opi-backend (0.98) vili; urgency=low
+
+  * Implement groupalias add for admin maili #50
+  * Implement add/remove admin users for admin mail
+  * Don't let user remove themself #151
+  * Don't let user remove themself from admin group #152
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 25 Aug 2014 23:20:54 +0200
+
 opi-backend (0.97) vili; urgency=low
 
   * Implement SSL usage on fetchmail
