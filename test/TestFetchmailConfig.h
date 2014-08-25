@@ -8,12 +8,14 @@ class TestFetchmailConfig: public CppUnit::TestFixture
 	CPPUNIT_TEST_SUITE( TestFetchmailConfig );
 	CPPUNIT_TEST( TestBasicUsage );
 	CPPUNIT_TEST( TestErrorCases );
+	CPPUNIT_TEST( TestSSL );
 	CPPUNIT_TEST_SUITE_END();
 public:
 	void setUp();
 	void tearDown();
 
 	void TestBasicUsage();
+	void TestSSL();
 	void TestErrorCases();
 };
 

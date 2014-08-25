@@ -11,13 +11,20 @@
 using namespace std;
 using namespace Utils;
 
+struct userinfo
+{
+	string password;
+	string user;
+	bool use_ssl;
+};
+
 class FetchmailConfig
 {
 public:
 	FetchmailConfig(const string& cfgpath);
 
-	void AddAccount(const string& email, const string& host, const string& identity, const string& password, const string& user);
-	void UpdateAccount(const string& email, const string& host, const string& identity, const string& password, const string& user);
+	void AddAccount(const string& email, const string& host, const string& identity, const string& password, const string& user, bool use_ssl=false);
+	void UpdateAccount(const string& email, const string& host, const string& identity, const string& password, const string& user, bool use_ssl=false);
 
 	list<string> GetHosts();
 
@@ -34,7 +41,8 @@ private:
 	bool _hasuser( const string& host, const string& identity);
 	string configfile;
 	// <host < identity < password, user > > >
-	map<string, map<string, pair<string,string> > > config;
+	//map<string, map<string, pair<string,string> > > config;
+	map<string, map<string, struct userinfo > > config;
 	Regex host, user;
 	ConfigFile cfgfile;
 };

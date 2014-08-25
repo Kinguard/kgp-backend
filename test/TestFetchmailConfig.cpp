@@ -68,6 +68,7 @@ void TestFetchmailConfig::TestBasicUsage()
 
 	// Write and read back
 	fc.WriteConfig();
+
 	fc.ReadConfig();
 	CPPUNIT_ASSERT_EQUAL( (size_t)2, fc.GetHosts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)2, fc.GetAccounts("bengt").size() );
@@ -120,11 +121,28 @@ void TestFetchmailConfig::TestBasicUsage()
 	CPPUNIT_ASSERT_EQUAL( (size_t)0, fc.GetAccounts().size() );
 }
 
+void TestFetchmailConfig::TestSSL()
+{
+	FetchmailConfig fc("test.fil");
+
+	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("u1@krill.nu", "pop4.mymailhost.nu","Test ID1","Mys3cr$t P+$$w0rd","user"));
+	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("u2@krill.nu", "pop4.mymailhost.nu","Test ID2","Mys3cr$t P+$$w0rd","user", true));
+
+	fc.WriteConfig();
+	fc.ReadConfig();
+
+	map<string,string> user;
+	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("pop4.mymailhost.nu","Test ID1") );
+	CPPUNIT_ASSERT_EQUAL( string("false"), user["ssl"] );
+
+	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("pop4.mymailhost.nu","Test ID2") );
+	CPPUNIT_ASSERT_EQUAL( string("true"), user["ssl"] );
+}
+
 void TestFetchmailConfig::TestErrorCases()
 {
 	FetchmailConfig fc("no.fil");
 	CPPUNIT_ASSERT_NO_THROW( fc.ReadConfig()	);
 
 	CPPUNIT_ASSERT_NO_THROW( fc.GetAccounts() );
-
 }

@@ -11,24 +11,24 @@ using namespace Utils;
 FetchmailConfig::FetchmailConfig(const string &cfgpath):
 	configfile(cfgpath),
 	host("^poll\\s+(\\S+)\\s+with proto"),
-	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here"),
+	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here\\s+(\\S+)"),
 	cfgfile(cfgpath+".lnk")
 {
 	this->ReadConfig();
 }
 
-void FetchmailConfig::AddAccount(const string &email, const string &host, const string &identity, const string &password, const string &user)
+void FetchmailConfig::AddAccount(const string &email, const string &host, const string &identity, const string &password, const string &user, bool use_ssl)
 {
 	if( this->_hasuser( host, identity ) )
 	{
 		throw runtime_error("User already exists");
 	}
 	this->cfgfile[host+"\t"+identity] = email;
-	this->config[host][identity] = make_pair(password, user);
+	this->config[host][identity] = {password, user, use_ssl};
 
 }
 
-void FetchmailConfig::UpdateAccount(const string &email, const string &host, const string &identity, const string &password, const string &user)
+void FetchmailConfig::UpdateAccount(const string &email, const string &host, const string &identity, const string &password, const string &user, bool use_ssl)
 {
 	if( ! this->_hasuser( host, identity ) )
 	{
@@ -36,7 +36,7 @@ void FetchmailConfig::UpdateAccount(const string &email, const string &host, con
 	}
 
 	this->cfgfile[host+"\t"+identity] = email;
-	this->config[host][identity] = make_pair(password, user);
+	this->config[host][identity] = {password, user, use_ssl};
 }
 
 list<string> FetchmailConfig::GetHosts()
@@ -60,8 +60,9 @@ map<string, string> FetchmailConfig::GetAccount(const string &host, const string
 		{"email",		this->cfgfile[host+"\t"+identity]},
 		{"host",		host},
 		{"identity",	identity},
-		{"password",	this->config[host][identity].first},
-		{"username",	this->config[host][identity].second},
+		{"password",	this->config[host][identity].password},
+		{"username",	this->config[host][identity].user},
+		{"ssl",	this->config[host][identity].use_ssl?"true":"false"},
 	};
 
 }
@@ -119,7 +120,7 @@ void FetchmailConfig::ReadConfig()
 		{
 			lasthost = line.substr( m[1].rm_so, m[1].rm_eo-m[1].rm_so );
 		}
-		else if( (m = user.DoMatch(line)).size() == 4 )
+		else if( (m = user.DoMatch(line)).size() >= 4 )
 		{
 			if( lasthost ==  "")
 			{
@@ -128,8 +129,8 @@ void FetchmailConfig::ReadConfig()
 			string identity =	String::Trimmed( getmatchstring( line, m[1]), "'\"" );
 			string password =	String::Trimmed( getmatchstring( line, m[2]), "'\"" );
 			string user =		String::Trimmed( getmatchstring( line, m[3]), "'\"" );
-			this->config[lasthost][identity] =
-					make_pair( password,user);
+			bool usessl =  ( m.size() == 5);
+			this->config[lasthost][identity] = { password, user, usessl };
 		}
 	}
 }
@@ -151,12 +152,17 @@ void FetchmailConfig::WriteConfig()
 
 		out << "\npoll "<<host<<" with proto POP3\n";
 
-		map< string, pair<string,string> > users = cfgline.second;
+		map< string, struct userinfo > users = cfgline.second;
 		for( const auto& user: users )
 		{
 			out << "\tuser '"<<user.first <<"' there with password '"
-				<<user.second.first << "' is '"<<user.second.second
-			   << "' here smtpaddress localdomain\n";
+				<<user.second.password << "' is '"<<user.second.user
+			   << "' here";
+			if( user.second.use_ssl )
+			{
+				out << " ssl";
+			}
+			out	<< " smtpaddress localdomain\n";
 		}
 	}
 	this->cfgfile.Sync(true, 0600);
