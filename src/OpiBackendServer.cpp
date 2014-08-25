@@ -784,6 +784,12 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	string group =	cmd["group"].asString();
 	string member =	cmd["member"].asString();
 
+	if( ( group == "admin" ) && ( member == this->UserFromToken( token ) ) )
+	{
+		this->SendErrorMessage(client, cmd, 403, "Not allowed");
+		return;
+	}
+
 	SecopPtr secop = this->clients[token].secop;
 
 	if( !secop->RemoveGroupMember(group, member) )
@@ -794,7 +800,7 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 
 	if( group == "admin" )
 	{
-		removeuserfrommailadmin( user );
+		removeuserfrommailadmin( member );
 	}
 
 	this->SendOK(client, cmd);
