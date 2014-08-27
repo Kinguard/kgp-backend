@@ -11,7 +11,7 @@ using namespace Utils;
 FetchmailConfig::FetchmailConfig(const string &cfgpath):
 	configfile(cfgpath),
 	host("^poll\\s+(\\S+)\\s+with proto"),
-	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here\\s+(\\S+)"),
+	user("\\s+user\\s+(\\S+)\\s+there with password\\s+(.+)\\s+is\\s+(\\S+)\\s+here\\s+(ssl|)"),
 	cfgfile(cfgpath+".lnk")
 {
 	this->ReadConfig();
@@ -129,7 +129,7 @@ void FetchmailConfig::ReadConfig()
 			string identity =	String::Trimmed( getmatchstring( line, m[1]), "'\"" );
 			string password =	String::Trimmed( getmatchstring( line, m[2]), "'\"" );
 			string user =		String::Trimmed( getmatchstring( line, m[3]), "'\"" );
-			bool usessl =  ( m.size() == 5);
+			bool usessl =  ( m.size() == 5) && ( getmatchstring( line, m[4]) == "ssl" );
 			this->config[lasthost][identity] = { password, user, usessl };
 		}
 	}

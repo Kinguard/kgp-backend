@@ -32,7 +32,7 @@ void TestFetchmailConfig::setUp()
 	<< "\n"
 	<< "poll  pop3.gmail.se with proto POP3 \n"
 	<< "	interval 5\n"
-	<< "	user 'kalle' there with password 'd3 22d2d' is 'sven' here ssl smtpaddress localdomain\n"
+	<< "	user 'kalle' there with password 'd3 22d2d' is 'sven' here smtpaddress localdomain\n"
 	<< "	user 'bengt' there with password 'd2d243r2r' is 'bengt' here ssl smtpaddress localdomain\n";
 
 	out.close();
@@ -74,11 +74,14 @@ void TestFetchmailConfig::TestBasicUsage()
 	CPPUNIT_ASSERT_EQUAL( (size_t)2, fc.GetAccounts("bengt").size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)4, fc.GetAccounts().size() );
 
-	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("me@myself.me", "new.host.me","my identity","Mys3cr$t P+$$w0rd","user"));
-	CPPUNIT_ASSERT_THROW( fc.AddAccount("me@myself.me","new.host.me","my identity","Mys3cr$t P+$$w0rd","user"), runtime_error);
+	CPPUNIT_ASSERT_NO_THROW( fc.AddAccount("me@myself.me", "new.host.me","my identity","Mys3cr$t P+$$w0rd","user",false));
+	CPPUNIT_ASSERT_THROW( fc.AddAccount("me@myself.me","new.host.me","my identity","Mys3cr$t P+$$w0rd","user",false), runtime_error);
 	CPPUNIT_ASSERT_EQUAL( (size_t)3, fc.GetHosts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)5, fc.GetAccounts().size() );
 	CPPUNIT_ASSERT_EQUAL( (size_t)1, fc.GetAccounts("user").size() );
+
+	fc.WriteConfig();
+	fc.ReadConfig();
 
 	map<string,string> user;
 	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("new.host.me","my identity") );
@@ -87,8 +90,12 @@ void TestFetchmailConfig::TestBasicUsage()
 	CPPUNIT_ASSERT_EQUAL( string("my identity"),		user["identity"]);
 	CPPUNIT_ASSERT_EQUAL( string("Mys3cr$t P+$$w0rd"),	user["password"]);
 	CPPUNIT_ASSERT_EQUAL( string("user"),				user["username"]);
+	CPPUNIT_ASSERT_EQUAL( string("false"),				user["ssl"]);
 
-	CPPUNIT_ASSERT_NO_THROW( fc.UpdateAccount("me@myself.me","new.host.me","my identity","nosecret","newuser") );
+	CPPUNIT_ASSERT_NO_THROW( fc.UpdateAccount("me@myself.me","new.host.me","my identity","nosecret","newuser",false) );
+
+	fc.WriteConfig();
+	fc.ReadConfig();
 
 	CPPUNIT_ASSERT_NO_THROW( user = fc.GetAccount("new.host.me","my identity") );
 	CPPUNIT_ASSERT_EQUAL( string("me@myself.me"),		user["email"]);
@@ -96,6 +103,7 @@ void TestFetchmailConfig::TestBasicUsage()
 	CPPUNIT_ASSERT_EQUAL( string("my identity"),	user["identity"]);
 	CPPUNIT_ASSERT_EQUAL( string("nosecret"),		user["password"]);
 	CPPUNIT_ASSERT_EQUAL( string("newuser"),		user["username"]);
+	CPPUNIT_ASSERT_EQUAL( string("false"),				user["ssl"]);
 
 	CPPUNIT_ASSERT_NO_THROW( fc.DeleteAccount("pop3.mymailhost.nu","tor@krill.nu") );
 	CPPUNIT_ASSERT_THROW( fc.GetAccount("pop3.mymailhost.nu","tor@krill.nu"), runtime_error );
