@@ -459,7 +459,7 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 {
 	ScopedLog l("Do get users");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd)  )
 	{
 		return;
 	}
