@@ -47,11 +47,13 @@ public:
 	void SetAddress(const string& domain, const string& address, const string& user);
 	void DeleteAddress(const string& domain, const string& address);
 	list<tuple<string,string>> GetAddresses(const string& domain);
+	tuple<string,string> GetAddress(const string& domain, const string& address);
+
+	inline bool hasDomain(const string& domain);
+	inline bool hasAddress(const string& domain, const string& address);
 
 	virtual ~MailMapFile();
 protected:
-	inline bool hasDomain(const string& domain);
-	inline bool hasAddress(const string& domain, const string& address);
 
 	// <Domain, <remote user, local user>>
 	map<string, map<string,string> > config;

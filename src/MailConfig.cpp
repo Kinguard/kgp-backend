@@ -211,6 +211,11 @@ list<tuple<string, string> > MailMapFile::GetAddresses(const string &domain)
 	return adresses;
 }
 
+tuple<string, string> MailMapFile::GetAddress(const string &domain, const string &address)
+{
+	return make_tuple(address,this->config[domain][address]);
+}
+
 MailMapFile::~MailMapFile()
 {
 

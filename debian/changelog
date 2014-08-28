@@ -1,6 +1,6 @@
 opi-backend (1.0) vili; urgency=low
 
-  * Allow any user list users in system
+  * Fix bugs for non user email config
 
  -- Tor Krill <tor@openproducts.se>  Wed, 27 Aug 2014 22:35:10 +0200
 

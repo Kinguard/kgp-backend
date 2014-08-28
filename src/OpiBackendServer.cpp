@@ -1043,7 +1043,7 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Do smtp get domains");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
@@ -1066,7 +1066,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 {
 	ScopedLog l("Do smtp add domain");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
@@ -1204,7 +1204,28 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 
 	string domain = cmd["domain"].asString();
 
+	string token = cmd["token"].asString();
+	bool admin = this->isAdmin( token );
+	string user = this->UserFromToken(token);
+
 	MailConfig mc;
+
+	// We only allow delete of domain if you are admin OR
+	// is the only user of this domain
+	if( ! admin )
+	{
+		list<tuple<string, string> > addresses = mc.GetAddresses(domain);
+
+		for( auto address: addresses)
+		{
+			if( get<1>(address) != user )
+			{
+				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				return;
+			}
+		}
+
+	}
 
 	mc.DeleteDomain(domain);
 	mc.WriteConfig();
@@ -1223,7 +1244,7 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 {
 	ScopedLog l("Do smtp get addresses");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
@@ -1235,6 +1256,10 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 
 	string domain = cmd["domain"].asString();
 
+	string token = cmd["token"].asString();
+	bool admin = this->isAdmin( token );
+	string user = this->UserFromToken(token);
+
 	MailConfig mc;
 
 	list<tuple<string,string>> addresses = mc.GetAddresses(domain);
@@ -1243,6 +1268,12 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 	res["addresses"]=Json::arrayValue;
 	for( auto address: addresses )
 	{
+		// Only return own adresses if not admin
+		if( ! admin && user != get<1>(address) )
+		{
+			continue;
+		}
+
 		Json::Value adr;
 		adr["address"] = get<0>(address);
 		adr["username"] = get<1>(address);
@@ -1257,7 +1288,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 {
 	ScopedLog l("Do smtp add address");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
@@ -1271,7 +1302,36 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 	string username = cmd["username"].asString();
 	string address = cmd["address"].asString();
 
+	string token = cmd["token"].asString();
+	bool admin = this->isAdmin( token );
+	string user = this->UserFromToken(token);
+
+	if( !admin && ( user != username ) )
+	{
+		// If not admin you only can add/update mail addressed to yourself
+		this->SendErrorMessage( client, cmd, 403, "Not allowed");
+		return;
+	}
+
 	MailConfig mc;
+
+	if( ! admin )
+	{
+		// Non admin users can only add not used addresses
+		// or update their own addresses
+		if( mc.hasAddress( domain, address) )
+		{
+			string adr, localuser;
+			tie(adr, localuser) = mc.GetAddress(domain,address);
+
+			if( user != localuser )
+			{
+				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				return;
+
+			}
+		}
+	}
 
 	mc.SetAddress(domain, address, username);
 	mc.WriteConfig();
@@ -1290,7 +1350,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 {
 	ScopedLog l("Do smtp delete address");
 
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
@@ -1300,10 +1360,31 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
+	string token = cmd["token"].asString();
+	bool admin = this->isAdmin( token );
+	string user = this->UserFromToken(token);
+
 	string domain = cmd["domain"].asString();
 	string address = cmd["address"].asString();
 
 	MailConfig mc;
+
+	if( ! admin )
+	{
+		// None admins can only delete their own addresses
+		if( mc.hasAddress(domain, address) )
+		{
+			string adr, localuser;
+			tie(adr, localuser) = mc.GetAddress(domain,address);
+
+			if( user != localuser )
+			{
+				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				return;
+
+			}
+		}
+	}
 
 	mc.DeleteAddress( domain, address );
 	mc.WriteConfig();
