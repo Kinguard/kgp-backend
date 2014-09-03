@@ -20,6 +20,7 @@ public:
 protected:
 	void SigTerm(int signo);
 	void SigHup(int signo);
+	void SigPipe(int signo);
 
 private:
 	OpiBackendServerPtr server;

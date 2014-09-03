@@ -25,6 +25,7 @@ void OpiBackendApp::Startup()
 	Utils::SigHandler::Instance().AddHandler(SIGTERM, std::bind(&OpiBackendApp::SigTerm, this, _1) );
 	Utils::SigHandler::Instance().AddHandler(SIGINT, std::bind(&OpiBackendApp::SigTerm, this, _1) );
 	Utils::SigHandler::Instance().AddHandler(SIGHUP, std::bind(&OpiBackendApp::SigHup, this, _1) );
+	Utils::SigHandler::Instance().AddHandler(SIGPIPE, std::bind(&OpiBackendApp::SigPipe, this, _1) );
 
 	unlink(SOCKPATH);
 }
@@ -59,4 +60,9 @@ void OpiBackendApp::SigTerm(int signo)
 void OpiBackendApp::SigHup(int signo)
 {
 
+}
+
+void OpiBackendApp::SigPipe(int signo)
+{
+	logg << Logger::Info << "Got SIGPIPE, ignoring"<<lend;
 }
