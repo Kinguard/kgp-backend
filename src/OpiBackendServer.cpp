@@ -2002,7 +2002,7 @@ void OpiBackendServer::ReapClient(const string &token)
 
 	if( this->users.find(user) == this->users.end() )
 	{
-		logg << Logger::Error << "User token not found to delete"<<lend;
+		logg << Logger::Error << "User token for user " << user <<" not found to delete"<<lend;
 		return;
 	}
 
