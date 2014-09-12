@@ -4,6 +4,7 @@ set( applib_src
 	FetchmailConfig.cpp
 	SmtpClientConfig.cpp
 	MailConfig.cpp
+	WebClient.cpp
 	)
 
 include_directories ( "${LIBOPI_INCLUDE_DIRS}" )

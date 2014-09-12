@@ -15,17 +15,12 @@
 
 #include "Config.h"
 
+#include "WebClient.h"
+
 using namespace Utils;
 using namespace Utils::Net;
 using namespace std;
 using namespace OPI;
-
-typedef struct _userdata
-{
-	SecopPtr	secop;
-	time_t		lastaccess;
-	bool		isadmin;
-} userdata;
 
 class OpiBackendServer: public Utils::Net::NetServer
 {
@@ -95,23 +90,19 @@ private:
 	bool CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Value& req);
 	bool CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Json::Value& req);
 
-	bool CheckLoggedIn(const string& username);
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
 
 	string BackendLogin(const string& unit_id);
 
 	// Lifecycle management
-	void TouchCLient(const string& token);
 	time_t lastreap;
-	void ReapClient(const string& token);
 	// ONLY call this when not processing a request!
 	void ReapClients();
 
 	Json::Value GetUser(const string& token, const string& user);
 
 	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-
 
 	void SendReply(UnixStreamClientSocketPtr& client, Json::Value& val);
 	void SendErrorMessage(UnixStreamClientSocketPtr& client, const Json::Value& cmd, int errcode, const string& msg);
@@ -120,17 +111,7 @@ private:
 	typedef void (OpiBackendServer::*Action)(UnixStreamClientSocketPtr&, Json::Value&);
 	map<string,Action> actions;
 
-	inline string UserFromToken( const string& token);
-	inline const string& TokenFromUser( const string& user);
-	inline SecopPtr SecopFromCmd(Json::Value& cmd);
-
-	string AddUser(const string& username, SecopPtr secop);
-
-	// <token, pointer to secopconnection>
-	map<string, userdata> clients;
-
-	// <Username, token>
-	map<string, string> users;
+	Clients clients;
 
 	Json::FastWriter writer;
 	Json::Reader reader;

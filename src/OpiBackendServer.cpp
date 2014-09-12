@@ -209,10 +209,12 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 	string username = cmd["username"].asString();
 	string password = cmd["password"].asString();
 
-	if( this->CheckLoggedIn( username ))
+	if( this->clients.IsUsernameLoggedin( username ))
 	{
 		logg << Logger::Debug << "User seems already logged in, validating anyway"<<lend;
-		SecopPtr secop = this->clients[this->users[ username ] ].secop;
+
+		WebClientPtr wc = this->clients.GetClientByUsername( username );
+		SecopPtr secop = wc->Secop();
 
 		if( ! secop )
 		{
@@ -229,12 +231,9 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 		// User reauthorized?? Return same token
 		Json::Value ret;
-		ret["token"] = this->users[username];
+		ret["token"] = wc->Token();
 
 		this->SendOK(client, cmd, ret);
-
-		// Update last access
-		this->TouchCLient( this->users[username]);
 
 		return;
 	}
@@ -248,17 +247,13 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		}
 
 		// we have a new login
-		string token = this->AddUser(username, secop);
+		WebClientPtr wc = this->clients.CreateNewClient( username, secop );
 
 		Json::Value ret;
-		ret["token"] = token;
+		ret["token"] = wc->Token();
 
 		this->SendOK(client, cmd, ret);
-
-		this->TouchCLient( this->users[username]);
 	}
-
-
 }
 
 void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -305,7 +300,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string pass =		cmd["password"].asString();
 	string display =	cmd["displayname"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
 
 	if( ! secop->CreateUser( user, pass,display ) )
 	{
@@ -350,13 +345,16 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
-	if( user == this->UserFromToken( token ) )
+	WebClientPtr wc = this->clients.GetClientByToken( token );
+
+	if( user == wc->Username() )
 	{
+		// Not allowed to comit suicide
 		this->SendErrorMessage(client, cmd, 403, "Not allowed");
 		return;
 	}
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = wc->Secop();
 
 	if( ! secop->RemoveUser( user ) )
 	{
@@ -406,7 +404,7 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	vector<string> users  = secop->GetUsers();
 
@@ -444,7 +442,7 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string user =		cmd["username"].asString();
 	string disp =		cmd["displayname"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	if( ! secop->AddAttribute(user, "displayname", disp) )
 	{
@@ -464,9 +462,10 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-	SecopPtr secop = this->SecopFromCmd(cmd);
 
 	string token = cmd["token"].asString();
+
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	vector<string> usernames = secop->GetUsers();
 	Json::Value ret;
@@ -494,8 +493,9 @@ void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::
 	}
 
 	string user =		cmd["username"].asString();
+	string token =		cmd["token"].asString();
 
-	SecopPtr secop = this->SecopFromCmd(cmd);
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	vector<string> groups = secop->GetUserGroups( user );
 
@@ -533,7 +533,9 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 	string passw =		cmd["password"].asString();
 	string newps =		cmd["newpassword"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	WebClientPtr wc = this->clients.GetClientByToken( token );
+
+	SecopPtr secop = wc->Secop();
 
 	list<map<string,string>>  ids = secop->GetIdentifiers( user, "opiuser");
 	if(ids.size() == 0 )
@@ -555,7 +557,7 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 	 * Else we rely on secop catching unauthorized updates
 	 */
 
-	if( user == this->UserFromToken( token ) )
+	if( user == wc->Username() )
 	{
 		if( passw != id["password"] )
 		{
@@ -622,7 +624,7 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	if( !secop->AddGroup(group) )
 	{
@@ -671,7 +673,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	string group =	cmd["group"].asString();
 	string member =	cmd["member"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	if( !secop->AddGroupMember(group, member) )
 	{
@@ -704,7 +706,7 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	vector<string> members = secop->GetGroupMembers( group );
 
@@ -736,7 +738,7 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	string token =	cmd["token"].asString();
 	string group =	cmd["group"].asString();
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	if( !secop->RemoveGroup(group) )
 	{
@@ -784,13 +786,15 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	string group =	cmd["group"].asString();
 	string member =	cmd["member"].asString();
 
-	if( ( group == "admin" ) && ( member == this->UserFromToken( token ) ) )
+	WebClientPtr wc = this->clients.GetClientByToken( token );
+
+	if( ( group == "admin" ) && ( member == wc->Username() ) )
 	{
 		this->SendErrorMessage(client, cmd, 403, "Not allowed");
 		return;
 	}
 
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = wc->Secop();
 
 	if( !secop->RemoveGroupMember(group, member) )
 	{
@@ -1206,7 +1210,8 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 
 	string token = cmd["token"].asString();
 	bool admin = this->isAdmin( token );
-	string user = this->UserFromToken(token);
+
+	string user = this->clients.GetClientByToken( token )->Username();
 
 	MailConfig mc;
 
@@ -1258,7 +1263,7 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 
 	string token = cmd["token"].asString();
 	bool admin = this->isAdmin( token );
-	string user = this->UserFromToken(token);
+	string user = this->clients.GetClientByToken( token )->Username();
 
 	MailConfig mc;
 
@@ -1304,7 +1309,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 
 	string token = cmd["token"].asString();
 	bool admin = this->isAdmin( token );
-	string user = this->UserFromToken(token);
+	string user = this->clients.GetClientByToken( token )->Username();
 
 	if( !admin && ( user != username ) )
 	{
@@ -1362,7 +1367,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 
 	string token = cmd["token"].asString();
 	bool admin = this->isAdmin( token );
-	string user = this->UserFromToken(token);
+	string user = this->clients.GetClientByToken( token )->Username();
 
 	string domain = cmd["domain"].asString();
 	string address = cmd["address"].asString();
@@ -1829,26 +1834,6 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	ServiceHelper::Start("nginx");
 }
 
-
-bool OpiBackendServer::CheckLoggedIn(const string &username)
-{
-	bool found = this->users.find(username) != this->users.end();
-	if( ! found )
-	{
-		return false;
-	}
-
-	// Check session
-	string token = this->TokenFromUser( username );
-
-	if( this->clients[token].lastaccess+SESSION_TIMEOUT  < time(nullptr) )
-	{
-		return false;
-	}
-
-	return true;
-}
-
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
 {
 	if( !req.isMember("token") && !req["token"].isString() )
@@ -1859,19 +1844,11 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 
 	string token = req["token"].asString();
 
-	if( this->clients.find( token ) == this->clients.end() )
+	if( ! this->clients.IsTokenLoggedin( token ) )
 	{
 		this->SendErrorMessage(client, req, 401, "Unauthorized");
 		return false;
 	}
-
-	if( this->clients[token].lastaccess+SESSION_TIMEOUT  < time(nullptr) )
-	{
-		this->SendErrorMessage(client, req, 401, "Unauthorized");
-		return false;
-	}
-
-	this->TouchCLient( token );
 
 	return true;
 }
@@ -1912,12 +1889,21 @@ bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Jso
 
 bool OpiBackendServer::isAdmin(const string &token)
 {
-	return this->clients[token].isadmin;
+	return this->clients.GetClientByToken(token)->IsAdmin();
 }
 
 bool OpiBackendServer::isAdminOrUser(const string &token, const string &user)
 {
-	return this->isAdmin( token ) || ( this->users[user] == token );
+	// return this->isAdmin( token ) || ( this->users[user] == token );
+
+	if( this->isAdmin( token ) )
+	{
+		return true;
+	}
+
+	WebClientPtr wc = this->clients.GetClientByUsername(user);
+
+	return wc &&  ( wc->Token() == token );
 }
 
 string OpiBackendServer::BackendLogin(const string &unit_id)
@@ -1988,34 +1974,6 @@ string OpiBackendServer::BackendLogin(const string &unit_id)
 
 }
 
-void OpiBackendServer::TouchCLient(const string &token)
-{
-	if( this->clients.find(token) != this->clients.end() )
-	{
-		this->clients[token].lastaccess = time(nullptr);
-	}
-}
-
-void OpiBackendServer::ReapClient(const string &token)
-{
-	string user = this->UserFromToken( token );
-
-	if( this->users.find(user) == this->users.end() )
-	{
-		logg << Logger::Error << "User token for user " << user <<" not found to delete"<<lend;
-		return;
-	}
-
-	if( this->clients.find(token) == this->clients.end() )
-	{
-		logg << Logger::Error << "Client to delete not found"<<lend;
-		return;
-	}
-
-	this->users.erase(user);
-	this->clients.erase(token);
-}
-
 void OpiBackendServer::ReapClients()
 {
 	// Only reap once a minute
@@ -2026,34 +1984,14 @@ void OpiBackendServer::ReapClients()
 
 	logg << Logger::Debug << "Reap clients"<<lend;
 
-	list <string> toreap;
-
-	for( auto client: this->clients )
-	{
-		string token = client.first;
-		userdata data = client.second;
-
-		if( data.lastaccess + SESSION_TIMEOUT < time(NULL) )
-		{
-			// Reap this client
-			toreap.push_back( token );
-		}
-
-	}
-
-	logg << Logger::Debug << "About to reap "<<toreap.size() << " clients of "<< this->clients.size() << " active"<<lend;
-
-	for( const string& client: toreap )
-	{
-		this->ReapClient( client );
-	}
+	this->clients.Reap();
 
 	this->lastreap = time(NULL);
 }
 
 Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
 {
-	SecopPtr secop = this->clients[token].secop;
+	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
 
 	Json::Value ret;
 	ret["username"] = user;
@@ -2125,45 +2063,6 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 	}
 
 	this->SendReply(client, ret);
-}
-
-string OpiBackendServer::UserFromToken(const string &token)
-{
-	for( auto usertoken: this->users)
-	{
-		if( usertoken.second == token )
-		{
-			return usertoken.first;
-		}
-	}
-	return "";
-}
-
-const string &OpiBackendServer::TokenFromUser(const string &user)
-{
-	return this->users[user];
-}
-
-SecopPtr OpiBackendServer::SecopFromCmd(Json::Value &cmd)
-{
-	return  this->clients[ cmd["token"].asString() ].secop;
-}
-
-string OpiBackendServer::AddUser(const string &username, SecopPtr secop)
-{
-	//TODO: Perhaps something a bit more elaborate token?
-	string token = String::UUID();
-
-
-	vector<string> members = secop->GetGroupMembers( "admin" );
-	bool isadmin = find(members.begin(), members.end(), username ) != members.end();
-
-	this->users[username] = token;
-	this->clients[token].secop = secop;
-	this->clients[token].isadmin = isadmin;
-	this->clients[token].lastaccess = time(nullptr);
-
-	return token;
 }
 
 // Local helper functions
