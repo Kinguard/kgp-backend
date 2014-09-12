@@ -1,3 +1,9 @@
+opi-backend (1.2) vili; urgency=low
+
+  * Refactor client handling
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 12 Sep 2014 16:38:09 +0200
+
 opi-backend (1.1) vili; urgency=low
 
   * Catch sigpipe not to terminate on socket write
