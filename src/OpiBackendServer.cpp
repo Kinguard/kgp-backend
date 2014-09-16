@@ -95,6 +95,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["updateuser"]=&OpiBackendServer::DoUpdateUser;
 	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
 	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
+	this->actions["getuserexists"]=&OpiBackendServer::DoUserExists;
 	this->actions["getusers"]=&OpiBackendServer::DoGetUsers;
 	this->actions["getusergroups"]=&OpiBackendServer::DoGetUserGroups;
 
@@ -419,6 +420,32 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 	this->SendOK(client, cmd,ret);
 }
 
+void OpiBackendServer::DoUserExists(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do user exists");
+
+	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+	{
+		return;
+	}
+
+	string user =		cmd["username"].asString();
+
+	SecopPtr secop = SecopPtr( new Secop() );
+
+	secop->SockAuth();
+
+	vector<string> users  = secop->GetUsers();
+
+	bool exists = std::find(users.begin(), users.end(), user) != users.end();
+
+	Json::Value ret;
+	ret["username"] = user;
+	ret["exists"] = exists;
+
+	this->SendOK(client, cmd,ret);
+}
+
 void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do update user");
@@ -579,18 +606,6 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do get groups");
-
-	/*
-	if( ! this->CheckLoggedIn(client,cmd) )
-	{
-		return;
-	}
-
-	string token =	cmd["token"].asString();
-
-	SecopPtr secop = this->clients[token];
-
-*/
 
 	SecopPtr secop = SecopPtr( new Secop() );
 	secop->SockAuth();
