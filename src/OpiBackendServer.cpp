@@ -83,6 +83,9 @@ public:
 // Utility function forwards
 static bool update_postfix();
 static void postfix_fixpaths();
+static bool addusertomailadmin( const string& user );
+static bool removeuserfrommailadmin( const string& user );
+
 
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
@@ -357,10 +360,18 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 
 	SecopPtr secop = wc->Secop();
 
+	vector<string> groups = secop->GetUserGroups( user );
+	bool wasadmin = find( groups.begin(), groups.end(), "admin") != groups.end();
+
 	if( ! secop->RemoveUser( user ) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Failed");
 		return;
+	}
+
+	if( wasadmin )
+	{
+		removeuserfrommailadmin( user );
 	}
 
 	// Remove user from local mail
