@@ -4,7 +4,7 @@
 
 int main(int argc, char** argv)
 {
-	logg.SetLevel(Logger::Debug);
+	logg.SetLevel(Logger::Info);
 
 	int ret;
 	try

@@ -3,6 +3,7 @@
 #include "Config.h"
 
 #include <sys/stat.h>
+#include <syslog.h>
 #include <unistd.h>
 
 
@@ -20,7 +21,14 @@ OpiBackendApp::OpiBackendApp():DaemonApplication(OPIB_APP_NAME,"/var/run", "root
 
 void OpiBackendApp::Startup()
 {
-	//logg << Logger::Debug << "Starting up"<<lend;
+	// Divert logger to syslog
+	openlog( OPIB_APP_NAME, LOG_PERROR, LOG_DAEMON);
+	logg.SetOutputter( [](const string& msg){ syslog(LOG_INFO, "%s",msg.c_str());});
+	logg.SetLogName("");
+
+	logg << Logger::Info << "Starting"<<lend;
+
+	this->options.AddOption( Option('D', "debug", Option::ArgNone,"0","Debug logging") );
 
 	Utils::SigHandler::Instance().AddHandler(SIGTERM, std::bind(&OpiBackendApp::SigTerm, this, _1) );
 	Utils::SigHandler::Instance().AddHandler(SIGINT, std::bind(&OpiBackendApp::SigTerm, this, _1) );
@@ -32,6 +40,12 @@ void OpiBackendApp::Startup()
 
 void OpiBackendApp::Main()
 {
+	if( this->options["debug"] == "1" )
+	{
+		logg << Logger::Info << "Increase logging to debug level "<<lend;
+		logg.SetLevel(Logger::Debug);
+	}
+
 	this->server = OpiBackendServerPtr( new OpiBackendServer( SOCKPATH) );
 
 	chmod( SOCKPATH, 0666);
