@@ -29,7 +29,13 @@ void SmtpClientConfig::ReadConfig()
 	this->postconf->ReadConfig();
 	this->_parsesasl();
 
-	//return;
+	// Bugfix for #204 "Sätta relay host funkar inte" when relayhost left empty but sasl enabled
+	if ( this->postconf->getRelayhost() == "" )
+	{
+		this->postconf->setEnable(false);
+		return;
+	}
+
 	if( ! this->postconf->getEnable() )
 	{
 		return;

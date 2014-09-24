@@ -1443,7 +1443,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 	passwdline line = cfg.GetConfig();
 
 	Json::Value ret;
-	ret["usecustom"] =	line.host != "";
+	ret["usecustom"] =	line.enabled;
 	ret["relay"] =		line.host;
 	ret["username"] =	line.user;
 	ret["password"] =	line.pass;
@@ -1480,11 +1480,11 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	string host = cmd["hostname"].asString();
 	string port = cmd["port"].asString();
 
-	bool usecustom = ( usec == "true" );
-
 	passwdline cfg;
-	cfg.enabled = ( (user != "") || ( pass != "") );
-	if( usecustom )
+
+	cfg.enabled = ( usec == "true" );
+
+	if( cfg.enabled )
 	{
 		cfg.host = host;
 		cfg.pass = pass;
