@@ -1,3 +1,13 @@
+opi-backend (1.5) vili; urgency=low
+
+  * Implement fix for #204 non functional smtp
+  * Change logging to use syslog by default
+  * Fix bug, removing user from admin group when user deleted
+  * Add new user exists function to fix sharing of files to non
+    logged in users
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 24 Sep 2014 22:30:32 +0200
+
 opi-backend (1.4) vili; urgency=low
 
   * Bump for build

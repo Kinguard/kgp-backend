@@ -77,7 +77,7 @@ void SmtpClientConfig::SetConfig(const passwdline &cfg)
 
 	stringstream host;
 	// Make sure we have no reminder config
-	this->passwd.empty();
+	this->passwd.clear();
 
 	if( cfg.host != "")
 	{
