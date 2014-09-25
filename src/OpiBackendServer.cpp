@@ -1443,7 +1443,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 	passwdline line = cfg.GetConfig();
 
 	Json::Value ret;
-	ret["usecustom"] =	line.enabled;
+	ret["usecustom"] =	line.host != "";
 	ret["relay"] =		line.host;
 	ret["username"] =	line.user;
 	ret["password"] =	line.pass;
@@ -1480,16 +1480,28 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	string host = cmd["hostname"].asString();
 	string port = cmd["port"].asString();
 
+	bool usecustom = ( usec == "true" );
+
+	if( usecustom && host == "" )
+	{
+		logg << Logger::Debug<< "No relay host specified"<<lend;
+		this->SendErrorMessage(client, cmd, 400, "No relay host specified");
+		return;
+	}
+
 	passwdline cfg;
 
-	cfg.enabled = ( usec == "true" );
-
-	if( cfg.enabled )
+	if( usecustom )
 	{
-		cfg.host = host;
-		cfg.pass = pass;
-		cfg.port = port;
-		cfg.user = user;
+		cfg.enabled = ( user != "" ) && ( pass != "" );
+
+		if( cfg.enabled )
+		{
+			cfg.host = host;
+			cfg.pass = pass;
+			cfg.port = port;
+			cfg.user = user;
+		}
 	}
 
 	SmtpClientConfig scli( SASLPASSWD );
