@@ -192,3 +192,22 @@ void TestMailConfig::TestChange()
 		}
 	}
 }
+
+// For bug #114 - Domänfil rensas aldrig
+void TestMailConfig::TestRemove()
+{
+	MailConfig mc("ok.fil");
+	CPPUNIT_ASSERT_NO_THROW( mc.ReadConfig());
+	mc.WriteConfig();
+
+	list<tuple<string,string>> adrs = mc.GetAddresses("kalle.com");
+	CPPUNIT_ASSERT_EQUAL( (size_t) 1, adrs.size() );
+
+	//cout << get<0>(adrs.front()) << get<1>(adrs.front()) <<endl;
+
+	mc.DeleteAddress("kalle.com","test");
+	mc.WriteConfig();
+
+	CPPUNIT_ASSERT_EQUAL( string(), File::GetContentAsString("domains") );
+
+}

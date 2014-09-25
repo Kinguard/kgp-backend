@@ -192,6 +192,13 @@ void MailMapFile::DeleteAddress(const string &domain, const string &address)
 	}
 
 	this->config[domain].erase(address);
+
+	// Last address?
+	if( this->config[domain].empty() )
+	{
+		this->config.erase(domain);
+	}
+
 }
 
 list<tuple<string, string> > MailMapFile::GetAddresses(const string &domain)
