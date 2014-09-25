@@ -239,7 +239,7 @@ void PostConfInterface::setEnable(bool value)
 
 void Postconf::ReadConfig()
 {
-	const char* cmd = "postconf  relayhost smtp_sasl_auth_enable";
+	const char* cmd = "/usr/sbin/postconf  relayhost smtp_sasl_auth_enable";
 	string ret = exec( cmd );
 
 	list<string> lines = String::Split(ret,"\n");

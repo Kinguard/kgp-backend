@@ -1493,11 +1493,12 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 
 	if( usecustom )
 	{
+		cfg.host = host;
+
 		cfg.enabled = ( user != "" ) && ( pass != "" );
 
 		if( cfg.enabled )
 		{
-			cfg.host = host;
 			cfg.pass = pass;
 			cfg.port = port;
 			cfg.user = user;
