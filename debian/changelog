@@ -1,3 +1,12 @@
+opi-backend (1.6) vili; urgency=low
+
+  * More #204 fixes, hopefully functional now
+  * Let relay host be authorative on use custom settings
+  * Use absolute paths to executables
+  * Allways provide host to config even when not using sasl
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 25 Sep 2014 12:08:51 +0200
+
 opi-backend (1.5) vili; urgency=low
 
   * Implement fix for #204 non functional smtp
