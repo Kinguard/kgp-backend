@@ -49,8 +49,8 @@ public:
 	list<tuple<string,string>> GetAddresses(const string& domain);
 	tuple<string,string> GetAddress(const string& domain, const string& address);
 
-	inline bool hasDomain(const string& domain);
-	inline bool hasAddress(const string& domain, const string& address);
+	bool hasDomain(const string& domain);
+	bool hasAddress(const string& domain, const string& address);
 
 	virtual ~MailMapFile();
 protected:

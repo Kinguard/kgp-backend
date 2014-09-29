@@ -1,3 +1,10 @@
+opi-backend (1.7) vili; urgency=low
+
+  * Move to upstart to fix respawn on exit
+  * Remove inlining of functions to make compileable on elder os
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 29 Sep 2014 12:04:51 +0200
+
 opi-backend (1.6) vili; urgency=low
 
   * More #204 fixes, hopefully functional now

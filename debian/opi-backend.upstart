@@ -1,0 +1,11 @@
+description "OPI backend admin service"
+author "Tor Krill <tor@opensproducts.com>"
+
+start on runlevel [2345]
+stop on runlevel[016]
+
+expect fork
+
+respawn
+respawn limit 10 5
+exec /usr/sbin/opi-backend -d
