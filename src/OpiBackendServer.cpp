@@ -1930,11 +1930,6 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_HST , cmd) )
-	{
-		return;
-	}
-
 	// Manually verify
 	if( !cmd.isMember("type") && !cmd["type"].isString() )
 	{
