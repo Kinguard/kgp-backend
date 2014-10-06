@@ -1891,9 +1891,9 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	if( cfg["addressing"].asString() == "static" )
 	{
 		ret["type"] = "static";
-		ret["ipnumber"] = cfg["options"]["address"].asString();
-		ret["netmask"] = cfg["options"]["netmask"].asString();
-		ret["gateway"] = cfg["options"]["gateway"].asString();
+		ret["ipnumber"] = cfg["options"]["address"][(uint)0].asString();
+		ret["netmask"] = cfg["options"]["netmask"][(uint)0].asString();
+		ret["gateway"] = cfg["options"]["gateway"][(uint)0].asString();
 	}
 	else if( cfg["addressing"].asString() == "dhcp" )
 	{
