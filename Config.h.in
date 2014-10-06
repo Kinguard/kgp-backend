@@ -45,4 +45,7 @@
 #define ACCESS_CONFIG "/etc/opi/opi-access.conf"
 
 #define SYS_INFO "/etc/opi/sysinfo.conf"
+
+#define OPI_NETIF	"eth0"
+
 #endif

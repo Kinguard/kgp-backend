@@ -1,9 +1,10 @@
 set( applib_src
+	FetchmailConfig.cpp
+	MailConfig.cpp
+	NetworkConfig.cpp
 	OpiBackendApp.cpp
 	OpiBackendServer.cpp
-	FetchmailConfig.cpp
 	SmtpClientConfig.cpp
-	MailConfig.cpp
 	WebClient.cpp
 	)
 

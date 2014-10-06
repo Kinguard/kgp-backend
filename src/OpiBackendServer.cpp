@@ -1,4 +1,5 @@
 #include "OpiBackendServer.h"
+#include "NetworkConfig.h"
 #include "SmtpClientConfig.h"
 #include "FetchmailConfig.h"
 #include "MailConfig.h"
@@ -140,6 +141,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
+
+	this->actions["setnetworksettings"]=&OpiBackendServer::DoNetworkSetSettings;
+	this->actions["getnetworksettings"]=&OpiBackendServer::DoNetworkGetSettings;
 
 	// Setup mail paths etc
 	postfix_fixpaths();
@@ -1871,6 +1875,138 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	ServiceHelper::Stop("nginx");
 	ServiceHelper::Start("nginx");
+}
+
+void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Get network settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+	{
+		return;
+	}
+
+	Json::Value cfg = NetUtils::NetworkConfig().GetInterface( OPI_NETIF );
+	Json::Value ret;
+	if( cfg["addressing"].asString() == "static" )
+	{
+		ret["type"] = "static";
+		ret["ipnumber"] = cfg["options"]["address"].asString();
+		ret["netmask"] = cfg["options"]["netmask"].asString();
+		ret["gateway"] = cfg["options"]["gateway"].asString();
+	}
+	else if( cfg["addressing"].asString() == "dhcp" )
+	{
+		ret["type"] = "dhcp";
+		ret["ipnumber"] = NetUtils::GetAddress( OPI_NETIF );
+		ret["netmask"] = NetUtils::GetNetmask( OPI_NETIF );
+		ret["gateway"] = NetUtils::GetDefaultRoute();
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 500, "Unknown addressing of network interface");
+		return;
+	}
+
+	NetUtils::ResolverConfig rc;
+
+	list<string> nss = rc.getNameservers();
+
+	ret["dns"]=Json::arrayValue;
+	for( auto ns: nss)
+	{
+		ret["dns"].append(ns);
+	}
+
+	this->SendOK( client, cmd, ret);
+}
+
+void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Set network settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_HST , cmd) )
+	{
+		return;
+	}
+
+	// Manually verify
+	if( !cmd.isMember("type") && !cmd["type"].isString() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
+	string type = cmd["type"].asString();
+	if( type != "dhcp" && type != "static")
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
+	if( type == "dhcp" )
+	{
+		NetUtils::NetworkConfig nc;
+		nc.SetDHCP( OPI_NETIF );
+		nc.WriteConfig();
+	}
+	else
+	{
+		if( !cmd.isMember("ipnumber") && !cmd["ipnumber"].isString() )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			return;
+		}
+		if( !cmd.isMember("netmask") && !cmd["netmask"].isString() )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			return;
+		}
+		if( !cmd.isMember("gateway") && !cmd["gateway"].isString() )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			return;
+		}
+		if( !cmd.isMember("dns") && !cmd["dns"].isArray() )
+		{
+			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			return;
+		}
+
+		NetUtils::NetworkConfig nc;
+		nc.SetStatic( OPI_NETIF, cmd["ipnumber"].asString(), cmd["netmask"].asString(), cmd["gateway"].asString() );
+		nc.WriteConfig();
+
+		NetUtils::ResolverConfig rc;
+		rc.setDomain("localdomain");
+		rc.setSearch("");
+
+		list<string> nss;
+
+		for(unsigned int i = 0; i < cmd["dns"].size(); i++ )
+		{
+			if( cmd["dns"][i].isString() )
+			{
+				nss.push_back(cmd["dns"][i].asString());
+			}
+		}
+
+		rc.setNameservers( nss );
+		rc.WriteConfig();
+	}
+
+	if( ! NetUtils::RestartInterface( OPI_NETIF ) )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to restart network");
+		return;
+	}
+
+	this->SendOK(client, cmd);
 }
 
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)

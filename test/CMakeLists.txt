@@ -5,11 +5,14 @@ set( testapp_src
 	TestMailConfig.cpp
 	TestFetchmailConfig.cpp
 	TestMailAliasFile.cpp
+	TestNetworkConfig.cpp
+	TestResolverConfig.cpp
 	TestSmtpClient.cpp
 	)
 
 include_directories(
     "${PROJECT_SOURCE_DIR}/src"
+	"${LIBOPI_INCLUDE_DIRS}"
 )
 
 add_definitions( -std=c++11 )
