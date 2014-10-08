@@ -1,3 +1,9 @@
+opi-backend (1.9) vili; urgency=low
+
+  * Update port forwar when update network settings
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 08 Oct 2014 09:13:31 +0200
+
 opi-backend (1.8) vili; urgency=low
 
   * Initial add of edit network settings
