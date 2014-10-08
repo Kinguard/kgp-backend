@@ -145,6 +145,10 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["setnetworksettings"]=&OpiBackendServer::DoNetworkSetSettings;
 	this->actions["getnetworksettings"]=&OpiBackendServer::DoNetworkGetSettings;
 
+	this->actions["getshellsettings"]=&OpiBackendServer::DoShellGetSettings;
+	this->actions["doshellenable"]=&OpiBackendServer::DoShellEnable;
+	this->actions["doshelldisable"]=&OpiBackendServer::DoShellDisable;
+
 	// Setup mail paths etc
 	postfix_fixpaths();
 
@@ -1998,6 +2002,69 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	if( ! NetUtils::RestartInterface( OPI_NETIF ) )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to restart network");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do shell get settings");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	int res = system( "/usr/bin/dpkg -l dropbear" );
+
+	if( ( res < 0)   )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to retrieve shell status");
+		return;
+	}
+
+	Json::Value ret;
+	ret["enabled"] = WEXITSTATUS(res) == 0;
+
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do shell enabled");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	int res = system( "/usr/share/opi-backend/enable_shell.sh" );
+
+	if( ( res < 0) || WEXITSTATUS(res) != 0 )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to enable shell");
+		return;
+	}
+
+	this->SendOK(client, cmd);
+}
+
+void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do shell disabled");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	int res = system( "/usr/share/opi-backend/disable_shell.sh" );
+
+	if( ( res < 0) || WEXITSTATUS(res) != 0 )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to disable shell");
 		return;
 	}
 

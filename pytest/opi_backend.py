@@ -349,3 +349,21 @@ class OPIBackend( Client ):
 		req["cmd"] = "getnetworksettings"
 		req["token"] = token
 		return self._dorequest(req, dump)
+
+	def getshellsettings(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "getshellsettings"
+		req["token"] = token
+		return self._dorequest(req, dump)
+
+	def setshellenabled(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "doshellenable"
+		req["token"] = token
+		return self._dorequest(req, dump)
+
+	def setshelldisabled(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "doshelldisable"
+		req["token"] = token
+		return self._dorequest(req, dump)

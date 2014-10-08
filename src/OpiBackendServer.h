@@ -84,6 +84,10 @@ private:
 	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
+	void DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 	// Helper functions
 	string ExecCmd(const char *$cmd);
 
