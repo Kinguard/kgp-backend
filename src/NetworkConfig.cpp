@@ -411,8 +411,11 @@ bool RestartInterface(const string &ifname)
 	const string downcmd("/sbin/ifdown ");
 
 	bool ret = exec(downcmd + ifname );
+	ret = exec( upcmd + ifname ) && ret;
 
-	return exec( upcmd + ifname ) && ret;
+	ret = exec( "/usr/share/opi-access/opi-access.sh" ) && ret;
+
+	return ret;
 }
 
 } // End namespace
