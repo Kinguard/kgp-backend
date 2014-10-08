@@ -1,3 +1,9 @@
+opi-backend (1.10) vili; urgency=low
+
+  * Initial implementation of shell access settings
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 08 Oct 2014 15:22:16 +0200
+
 opi-backend (1.9) vili; urgency=low
 
   * Update port forwar when update network settings
