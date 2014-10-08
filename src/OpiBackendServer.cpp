@@ -2017,16 +2017,8 @@ void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 
-	int res = system( "/usr/bin/dpkg -l dropbear" );
-
-	if( ( res < 0)   )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to retrieve shell status");
-		return;
-	}
-
 	Json::Value ret;
-	ret["enabled"] = WEXITSTATUS(res) == 0;
+	ret["enabled"] = File::FileExists("/usr/sbin/dropbear");
 
 	this->SendOK(client, cmd, ret);
 }

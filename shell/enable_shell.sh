@@ -2,7 +2,7 @@
 
 # Check that we are not already running dropbear
 
-if dpkg -l dropbear &> /dev/null
+if [ -x /usr/sbin/dropbear ]
 then
 	exit 1
 fi

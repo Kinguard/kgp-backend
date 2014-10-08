@@ -2,7 +2,7 @@
 
 #Make sure we are running dropbear
 
-if ! dpkg -l dropbears &> /dev/null
+if [  ! -x /usr/sbin/dropbear ]
 then
         exit 1
 fi

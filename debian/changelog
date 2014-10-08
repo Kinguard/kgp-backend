@@ -1,3 +1,9 @@
+opi-backend (1.11) vili; urgency=low
+
+  * Change check for ssh to look at binary existing
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 08 Oct 2014 15:57:33 +0200
+
 opi-backend (1.10) vili; urgency=low
 
   * Initial implementation of shell access settings
