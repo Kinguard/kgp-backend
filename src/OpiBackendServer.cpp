@@ -22,22 +22,26 @@
  * Bit patterns for argument checks
  * (A bit uggly but effective)
  */
-#define CHK_USR	0x0001	// Check username
-#define CHK_PWD	0x0002	// Check password
-#define CHK_DSP	0x0004	// Check displayname
-#define CHK_NPW 0x0008	// Check new password
-#define CHK_GRP 0x0010	// Check group
-#define CHK_DMN 0x0020	// Check domain
-#define CHK_ADR 0x0040	// Check address
-#define CHK_HST 0x0080  // Check hostname
-#define CHK_IDN 0x0100  // Check identity
-#define CHK_PRT 0x0200  // Check port
-#define CHK_EML 0x0400  // Check email
-#define CHK_SSL 0x0800  // Check ssl
+#define CHK_USR	0x00000001	// Check username
+#define CHK_PWD	0x00000002	// Check password
+#define CHK_DSP	0x00000004	// Check displayname
+#define CHK_NPW 0x00000008	// Check new password
+#define CHK_GRP 0x00000010	// Check group
+#define CHK_DMN 0x00000020	// Check domain
+#define CHK_ADR 0x00000040	// Check address
+#define CHK_HST 0x00000080  // Check hostname
+#define CHK_IDN 0x00000100  // Check identity
+#define CHK_PRT 0x00000200  // Check port
+#define CHK_EML 0x00000400  // Check email
+#define CHK_SSL 0x00000800  // Check ssl
+#define CHK_TYP 0x00001000  // Check type
+#define CHK_SND 0x00002000  // Check send
+#define CHK_RCV 0x00004000  // Check receive
 
 enum ArgCheckType{
 	STRING,
-	INT
+	INT,
+	BOOL
 };
 
 typedef struct ArgCheckStruct
@@ -61,6 +65,9 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_PRT, "port",			ArgCheckType::STRING },
 			{ CHK_EML, "email",			ArgCheckType::STRING },
 			{ CHK_SSL, "ssl",			ArgCheckType::STRING },
+			{ CHK_TYP, "type",			ArgCheckType::STRING },
+			{ CHK_SND, "send",			ArgCheckType::BOOL },
+			{ CHK_TYP, "receive",		ArgCheckType::BOOL },
 	});
 
 // Convenience class for debug/trace
@@ -1447,18 +1454,38 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	SmtpClientConfig cfg( SASLPASSWD );
-	passwdline line = cfg.GetConfig();
+	SmtpConfig cfg(SASLPASSWD);
 
 	Json::Value ret;
-	ret["usecustom"] =	line.host != "";
-	ret["relay"] =		line.host;
-	ret["username"] =	line.user;
-	ret["password"] =	line.pass;
-	ret["port"] =		line.port;
+	switch( cfg.GetMode() )
+	{
+	case SmtpConfig::OPI:
+		ret["type"]="OPI";
+		break;
+	case SmtpConfig::OPRelay:
+	{
+		OPRelayConf conf = cfg.GetOPRelayConfig();
+		ret["type"] = "EXTERNAL";
+		ret["send"] = conf.send;
+		ret["receive"] = conf.receive;
+		break;
+	}
+	case SmtpConfig::Custom:
+	{
+		OPCustomConf conf = cfg.GetOPCustomConfig();
+		ret["type"] = "CUSTOM";
+		ret["relay"] =		conf.host;
+		ret["username"] =	conf.user;
+		ret["password"] =	conf.pass;
+		ret["port"] =		conf.port;
+		break;
+	}
+	default:
+		throw runtime_error("No valid config");
+		break;
+	}
 
 	this->SendOK(client, cmd,ret);
-
 }
 
 void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1470,53 +1497,63 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_USR | CHK_PWD | CHK_HST | CHK_PRT , cmd) )
+	if( ! this->CheckArguments(client, CHK_TYP, cmd) )
 	{
 		return;
 	}
 
-	if( !cmd.isMember("usecustom") || !cmd["usecustom"].isString() )
+	string type = cmd["type"].asString();
+
+	if( type == "OPI")
 	{
-		logg << Logger::Debug<< "Failed to parse custom argument"<<lend;
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return;
+		SmtpConfig smtp( SASLPASSWD );
+
+		smtp.SetStandAloneMode();
 	}
-
-	string usec = cmd["usecustom"].asString();
-	string user = cmd["username"].asString();
-	string pass = cmd["password"].asString();
-	string host = cmd["hostname"].asString();
-	string port = cmd["port"].asString();
-
-	bool usecustom = ( usec == "true" );
-
-	if( usecustom && host == "" )
+	else if( type == "EXTERNAL" )
 	{
-		logg << Logger::Debug<< "No relay host specified"<<lend;
-		this->SendErrorMessage(client, cmd, 400, "No relay host specified");
-		return;
-	}
-
-	passwdline cfg;
-
-	if( usecustom )
-	{
-		cfg.host = host;
-
-		cfg.enabled = ( user != "" ) && ( pass != "" );
-
-		if( cfg.enabled )
+		if( ! this->CheckArguments(client, CHK_RCV | CHK_SND, cmd) )
 		{
-			cfg.pass = pass;
-			cfg.port = port;
-			cfg.user = user;
+			return;
 		}
+		SmtpConfig smtp( SASLPASSWD );
+		OPRelayConf conf;
+
+		conf.receive = cmd["receive"].asBool();
+		conf.send = cmd["send"].asBool();
+
+		smtp.SetOPRelayMode( conf );
 	}
+	else if( type == "CUSTOM" )
+	{
+		if( ! this->CheckArguments(client, CHK_USR | CHK_PWD | CHK_HST | CHK_PRT , cmd) )
+		{
+			return;
+		}
 
-	SmtpClientConfig scli( SASLPASSWD );
-	scli.SetConfig( cfg );
+		OPCustomConf conf;
+		conf.user = cmd["username"].asString();
+		conf.pass = cmd["password"].asString();
+		conf.host = cmd["hostname"].asString();
+		conf.port = cmd["port"].asString();
 
-	scli.WriteConfig();
+		if( conf.host == "" )
+		{
+			logg << Logger::Debug<< "No relay host specified"<<lend;
+			this->SendErrorMessage(client, cmd, 400, "No relay host specified");
+			return;
+		}
+
+		SmtpConfig smtp( SASLPASSWD );
+
+		smtp.SetCustomMode( conf );
+	}
+	else
+	{
+		logg << Logger::Debug << "Missing smtp type"<<lend;
+		this->SendErrorMessage(client, cmd, 400, "Missing type argument");
+		return;
+	}
 
 	update_postfix();
 
@@ -2326,6 +2363,9 @@ CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type)
 		break;
 	case ArgCheckType::INT:
 		return cmd.isMember( member ) && cmd[member].isInt();
+		break;
+	case ArgCheckType::BOOL:
+		return cmd.isMember( member ) && cmd[member].isBool();
 		break;
 	default:
 		return false;
