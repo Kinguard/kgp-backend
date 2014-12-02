@@ -1,3 +1,9 @@
+opi-backend (1.12) vili; urgency=low
+
+  * Update SMTP api to support OP relay
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 02 Dec 2014 16:54:56 +0100
+
 opi-backend (1.11) vili; urgency=low
 
   * Change check for ssh to look at binary existing
