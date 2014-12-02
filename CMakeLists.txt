@@ -2,7 +2,7 @@ project(opi-backend)
 cmake_minimum_required(VERSION 2.8)
 
 include( FindPkgConfig )
-pkg_check_modules ( LIBOPI REQUIRED libopi>=1.0 )
+pkg_check_modules ( LIBOPI REQUIRED libopi>=1.5 )
 
 set (OPIB_VERSION_MAJOR 1)
 set (OPIB_VERSION_MINOR 0)

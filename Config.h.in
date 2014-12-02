@@ -48,4 +48,6 @@
 
 #define OPI_NETIF	"eth0"
 
+#define OP_RELAYSERVER	"op-mail.openproducts.com"
+
 #endif

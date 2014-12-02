@@ -1,6 +1,6 @@
 #include "OpiBackendServer.h"
 #include "NetworkConfig.h"
-#include "SmtpClientConfig.h"
+#include "SmtpConfig.h"
 #include "FetchmailConfig.h"
 #include "MailConfig.h"
 #include "Config.h"

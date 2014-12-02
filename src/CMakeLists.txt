@@ -4,7 +4,7 @@ set( applib_src
 	NetworkConfig.cpp
 	OpiBackendApp.cpp
 	OpiBackendServer.cpp
-	SmtpClientConfig.cpp
+	SmtpConfig.cpp
 	WebClient.cpp
 	)
 

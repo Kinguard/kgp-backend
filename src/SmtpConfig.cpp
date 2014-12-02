@@ -5,8 +5,14 @@
 
 #include <libutils/String.h>
 #include <libutils/FileUtils.h>
+#include <libutils/ConfigFile.h>
 
-#include "SmtpClientConfig.h"
+#include <resolv.h>
+#include <libopi/DnsHelper.h>
+#include <libopi/AuthServer.h>
+
+#include "SmtpConfig.h"
+#include "Config.h"
 
 // Forwards for helpers
 
@@ -286,4 +292,256 @@ void Postconf::WriteConfig()
 	exec(cmd.str() );
 
 	// cout << cmd.str()<<endl;
+}
+
+
+SmtpConfig::SmtpConfig(const string &path): cfg(path)
+{
+	this->getConfig();
+}
+
+SmtpConfig::SmtpMode SmtpConfig::GetMode()
+{
+	return this->mode;
+}
+
+void SmtpConfig::SetStandAloneMode()
+{
+
+	if( this->mode == SmtpMode::OPI )
+	{
+		// No change
+		return;
+	}
+
+	// Else custom or relay, reset
+	passwdline pw;
+	pw.enabled = false;
+
+	SmtpClientConfig scli( SASLPASSWD );
+	scli.SetConfig( pw );
+
+	scli.WriteConfig();
+
+	this->opconf = { false, false};
+	this->customconf = {"","","",""};
+
+	if( this->mode == SmtpMode::OPRelay && this->opconf.receive )
+	{
+		// We used OP relay and OP configed to handle our mail, change
+		this->setMX( false );
+	}
+
+	this->mode = SmtpMode::OPI;
+}
+
+void SmtpConfig::SetOPRelayMode(OPRelayConf &conf)
+{
+
+	if( !conf.send && ! conf.receive )
+	{
+		throw runtime_error("Missing argument for relay settings");
+	}
+
+	// Should we use OP server as outgoing relay server?
+	if( conf.send )
+	{
+
+		stringstream cmd;
+
+		cmd << "/usr/sbin/postconf -e "
+			   << "smtp_tls_cert_file = /etc/opi/opi.cert "
+			   << "smtp_tls_key_file = /etc/opi/dnspriv.pem ";
+		exec(cmd.str());
+
+		passwdline pw;
+		pw.enabled = false;
+		pw.host = "op-mail.openproducts.com";
+		pw.port="587";
+
+		SmtpClientConfig scli( SASLPASSWD );
+		scli.SetConfig( pw );
+
+		scli.WriteConfig();
+	}
+	else
+	{
+		// Make sure we have no leftover config
+		passwdline pw;
+		pw.enabled = false;
+
+		SmtpClientConfig scli( SASLPASSWD );
+		scli.SetConfig( pw );
+
+		scli.WriteConfig();
+	}
+
+	// Tell OP server to forward mail to us!
+	if( conf.receive )
+	{
+		this->setMX( true );
+	}
+	else if( this->mode == SmtpMode::OPRelay && this->opconf.receive )
+	{
+		// We used relaymode earlier disable
+		this->setMX( false );
+	}
+
+	this->opconf = conf;
+	this->mode == SmtpMode::OPRelay;
+}
+
+OPRelayConf SmtpConfig::GetOPRelayConfig()
+{
+	if( this->mode != SmtpMode::OPRelay )
+	{
+		throw runtime_error("Not in OP relay mode");
+	}
+	return this->opconf;
+}
+
+void SmtpConfig::SetCustomMode(OPCustomConf &conf)
+{
+	passwdline cf;
+
+	cf.host = conf.host;
+	cf.port = conf.port;
+	cf.enabled = (conf.user != "") && ( conf.pass != "" );
+
+	if( cf.enabled )
+	{
+		cf.user = conf.user;
+		cf.pass = conf.pass;
+	}
+	this->cfg.SetConfig( cf );
+	this->cfg.WriteConfig();
+
+	if( this->mode == SmtpMode::OPRelay && this->opconf.receive )
+	{
+		this->setMX( false );
+	}
+
+	this->customconf = conf;
+	this->mode = SmtpMode::Custom;
+}
+
+OPCustomConf SmtpConfig::GetOPCustomConfig()
+{
+	if( this->mode != SmtpMode::Custom )
+	{
+		throw runtime_error("Not in custom mode");
+	}
+	return this->customconf;
+}
+
+SmtpConfig::~SmtpConfig()
+{
+
+}
+
+void SmtpConfig::getConfig()
+{
+	ConfigFile opicfg(SYS_INFO);
+	passwdline pass = cfg.GetConfig();
+
+	string name = opicfg.ValueOrDefault("opi_name");
+	if( name == "")
+	{
+		throw runtime_error("Opiname not found");
+	}
+
+	this->opiname = name+".op-i.me";
+
+
+	this->unit_id = opicfg.ValueOrDefault("unit_id");
+	if( this->unit_id == "")
+	{
+		throw runtime_error("Unit id not found");
+	}
+
+	// OP relay?
+	if( this->checkMX( ) )
+	{
+		this->mode = SmtpMode::OPRelay;
+		this->opconf.receive = true;
+
+		if( pass.host == OP_RELAYSERVER )
+		{
+			this->opconf.send = true;
+		}
+
+		return;
+	}
+
+	// OP relay send only?
+	if( pass.host == OP_RELAYSERVER )
+	{
+		this->mode = SmtpMode::OPRelay;
+		this->opconf.receive = false;
+		this->opconf.send = true;
+		return;
+	}
+
+	// OPI stand alone?
+	if( pass.host == "" )
+	{
+		this->mode = SmtpMode::OPI;
+		return;
+	}
+
+	// Must be custom mode
+	this->mode = SmtpMode::Custom;
+	this->customconf.host = pass.host;
+	this->customconf.pass = pass.pass;
+	this->customconf.port = pass.port;
+	this->customconf.user = pass.user;
+}
+
+bool SmtpConfig::checkMX()
+{
+	OPI::Dns::DnsHelper dns;
+
+	dns.Query(this->opiname.c_str(), ns_t_mx );
+
+	list<OPI::Dns::rr> answers = dns.getAnswers();
+
+	if( answers.size() == 0 )
+	{
+		return false;
+	}
+
+	for( const OPI::Dns::rr& r: answers )
+	{
+		if( r.type == ns_t_mx )
+		{
+			if( dynamic_cast<OPI::Dns::MXData*>( r.data.get() )->exchange == OP_RELAYSERVER )
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+void SmtpConfig::setMX(bool mxmode)
+{
+	int resultcode;
+	Json::Value ret;
+
+	OPI::AuthServer s( this->unit_id );
+
+	tie(resultcode, ret) = s.Login();
+
+	if( resultcode != 200 )
+	{
+		throw runtime_error("Unable to authenticate with backend server");
+	}
+	string token = ret["token"].asString();
+
+	tie(resultcode, ret) = s.UpdateMXPointer(mxmode, token);
+	if( resultcode != 200 )
+	{
+		throw runtime_error("Unable to update MX settings");
+	}
 }

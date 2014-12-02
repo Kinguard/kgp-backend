@@ -4,7 +4,7 @@
 
 #include "TestSmtpClient.h"
 
-#include "SmtpClientConfig.h"
+#include "SmtpConfig.h"
 
 CPPUNIT_TEST_SUITE_REGISTRATION ( TestSmtpClient );
 
