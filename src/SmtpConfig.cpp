@@ -350,8 +350,8 @@ void SmtpConfig::SetOPRelayMode(OPRelayConf &conf)
 		stringstream cmd;
 
 		cmd << "/usr/sbin/postconf -e "
-			   << "smtp_tls_cert_file = /etc/opi/opi.cert "
-			   << "smtp_tls_key_file = /etc/opi/dnspriv.pem ";
+			   << "smtp_tls_cert_file=/etc/opi/opi.cert "
+			   << "smtp_tls_key_file=/etc/opi/dnspriv.pem";
 		exec(cmd.str());
 
 		passwdline pw;
