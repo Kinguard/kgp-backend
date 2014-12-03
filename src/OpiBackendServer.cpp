@@ -1474,7 +1474,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 	{
 		OPCustomConf conf = cfg.GetOPCustomConfig();
 		ret["type"] = "CUSTOM";
-		ret["relay"] =		conf.host;
+		ret["hostname"] =	conf.host;
 		ret["username"] =	conf.user;
 		ret["password"] =	conf.pass;
 		ret["port"] =		conf.port;
