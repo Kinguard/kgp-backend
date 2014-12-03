@@ -323,14 +323,14 @@ void SmtpConfig::SetStandAloneMode()
 
 	scli.WriteConfig();
 
-	this->opconf = { false, false};
-	this->customconf = {"","","",""};
-
 	if( this->mode == SmtpMode::OPRelay && this->opconf.receive )
 	{
 		// We used OP relay and OP configed to handle our mail, change
 		this->setMX( false );
 	}
+
+	this->opconf = { false, false};
+	this->customconf = {"","","",""};
 
 	this->mode = SmtpMode::OPI;
 }
@@ -468,6 +468,10 @@ void SmtpConfig::getConfig()
 		if( pass.host == OP_RELAYSERVER )
 		{
 			this->opconf.send = true;
+		}
+		else
+		{
+			this->opconf.send = false;
 		}
 
 		return;

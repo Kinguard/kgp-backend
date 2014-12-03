@@ -1506,12 +1506,14 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 
 	if( type == "OPI")
 	{
+		logg << Logger::Debug << "Set opi mode"<<lend;
 		SmtpConfig smtp( SASLPASSWD );
 
 		smtp.SetStandAloneMode();
 	}
 	else if( type == "EXTERNAL" )
 	{
+		logg << Logger::Debug << "Set external server mode"<<lend;
 		if( ! this->CheckArguments(client, CHK_RCV | CHK_SND, cmd) )
 		{
 			return;
@@ -1526,6 +1528,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	}
 	else if( type == "CUSTOM" )
 	{
+		logg << Logger::Debug << "Set custom mode"<<lend;
 		if( ! this->CheckArguments(client, CHK_USR | CHK_PWD | CHK_HST | CHK_PRT , cmd) )
 		{
 			return;
