@@ -252,7 +252,7 @@ class OPIBackend( Client ):
 		req["cmd"] = "smtpsetsettings"
 		req["token"] = token
 		req["type"] = "CUSTOM"
-		req["relay"] = relay
+		req["hostname"] = relay
 		req["username"] = user
 		req["password"] = password
 		req["port"] = port
