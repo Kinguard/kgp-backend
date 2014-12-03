@@ -67,7 +67,7 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_SSL, "ssl",			ArgCheckType::STRING },
 			{ CHK_TYP, "type",			ArgCheckType::STRING },
 			{ CHK_SND, "send",			ArgCheckType::BOOL },
-			{ CHK_TYP, "receive",		ArgCheckType::BOOL },
+			{ CHK_RCV, "receive",		ArgCheckType::BOOL },
 	});
 
 // Convenience class for debug/trace

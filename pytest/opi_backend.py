@@ -118,7 +118,7 @@ class OPIBackend( Client ):
 
 	def getgroups(self, token, dump = defaultdump):
 		req = {}
-		req["cmd"] = "getgroups"
+		req["cmd"] = "groupsget"
 		req["token"] = token
 		return self._dorequest(req, dump)
 
@@ -141,7 +141,7 @@ class OPIBackend( Client ):
 		req = {}
 		req["cmd"] = "groupgetmembers"
 		req["token"] = token
-		req["token"] = group
+		req["group"] = group
 		return self._dorequest(req, dump)
 
 	def removegroup(self, token, group, dump = defaultdump):
@@ -247,15 +247,31 @@ class OPIBackend( Client ):
 		req["token"] = token
 		return self._dorequest(req, dump)
 
-	def setsmtpsettings(self, token, usecustom, relay, user, password, port, dump = defaultdump):
+	def setsmtpcustom(self, token, relay, user, password, port, dump = defaultdump):
 		req = {}
 		req["cmd"] = "smtpsetsettings"
 		req["token"] = token
-		req["usecustom"] = usecustom
+		req["type"] = "CUSTOM"
 		req["relay"] = relay
 		req["username"] = user
 		req["password"] = password
 		req["port"] = port
+		return self._dorequest(req, dump)
+
+	def setsmtpexternal(self, token, send, receive, dump = defaultdump):
+		req = {}
+		req["cmd"] = "smtpsetsettings"
+		req["token"] = token
+		req["type"] = "EXTERNAL"
+		req["send"] = send
+		req["receive"] = receive
+		return self._dorequest(req, dump)
+
+	def setsmtpopi(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "smtpsetsettings"
+		req["token"] = token
+		req["type"] = "OPI"
 		return self._dorequest(req, dump)
 
 	def getfetchmailaccounts(self, token, username, dump = defaultdump):
