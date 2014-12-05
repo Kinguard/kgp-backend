@@ -1,3 +1,9 @@
+opi-backend (1.12.3) vili; urgency=low
+
+  * Use new API to check MX
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 05 Dec 2014 12:05:34 +0100
+
 opi-backend (1.12.2) vili; urgency=low
 
   * Bugfix, reset parameters after use, not before
