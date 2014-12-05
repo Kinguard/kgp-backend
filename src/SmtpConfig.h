@@ -116,7 +116,7 @@ public:
 	virtual ~SmtpConfig();
 private:
 	void getConfig();
-	bool checkMX();
+	bool checkMX(const string &name);
 	void setMX(bool mxmode);
 
 

@@ -460,7 +460,7 @@ void SmtpConfig::getConfig()
 	}
 
 	// OP relay?
-	if( this->checkMX( ) )
+	if( this->checkMX( this->opiname ) )
 	{
 		this->mode = SmtpMode::OPRelay;
 		this->opconf.receive = true;
@@ -501,31 +501,16 @@ void SmtpConfig::getConfig()
 	this->customconf.user = pass.user;
 }
 
-bool SmtpConfig::checkMX()
+bool SmtpConfig::checkMX(const string& name)
 {
-	OPI::Dns::DnsHelper dns;
+	OPI::AuthServer auth(this->unit_id);
 
-	dns.Query(this->opiname.c_str(), ns_t_mx );
+	int resultcode;
+	Json::Value ret;
 
-	list<OPI::Dns::rr> answers = dns.getAnswers();
+	tie(resultcode, ret) = auth.CheckMXPointer(name);
 
-	if( answers.size() == 0 )
-	{
-		return false;
-	}
-
-	for( const OPI::Dns::rr& r: answers )
-	{
-		if( r.type == ns_t_mx )
-		{
-			if( dynamic_cast<OPI::Dns::MXData*>( r.data.get() )->exchange == OP_RELAYSERVER )
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
+	return resultcode == 200;
 }
 
 void SmtpConfig::setMX(bool mxmode)
