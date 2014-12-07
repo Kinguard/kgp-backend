@@ -1,3 +1,9 @@
+opi-backend (1.11.1) vili; urgency=low
+
+  * Any user can get user info, displayname.
+
+ -- Tor Krill <tor@openproducts.se>  Sun, 07 Dec 2014 14:31:19 +0100
+
 opi-backend (1.11) vili; urgency=low
 
   * Change check for ssh to look at binary existing

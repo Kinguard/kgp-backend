@@ -416,11 +416,6 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 		return;
 	}
 
-	if( ! this->CheckIsAdminOrUser(client, cmd) )
-	{
-		return;
-	}
-
 	string token =		cmd["token"].asString();
 	string user =		cmd["username"].asString();
 
