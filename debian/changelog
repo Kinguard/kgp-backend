@@ -1,3 +1,11 @@
+opi-backend (1.12.4) vili; urgency=low
+
+  * Refactor helpers into libopi
+  * Use login function in Authserver instead of local copy
+  * Remove local ExecCmd and use the one in libutils instead
+
+ -- Tor Krill <tor@openproducts.se>  Sun, 14 Dec 2014 23:40:20 +0100
+
 opi-backend (1.12.3) vili; urgency=low
 
   * Use new API to check MX

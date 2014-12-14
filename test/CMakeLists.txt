@@ -2,12 +2,6 @@ pkg_check_modules( CPPUNIT cppunit>=1.12.1 )
 
 set( testapp_src
 	test.cpp
-	TestMailConfig.cpp
-	TestFetchmailConfig.cpp
-	TestMailAliasFile.cpp
-	TestNetworkConfig.cpp
-	TestResolverConfig.cpp
-	TestSmtpClient.cpp
 	)
 
 include_directories(

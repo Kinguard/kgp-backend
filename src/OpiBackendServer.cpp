@@ -1,8 +1,4 @@
 #include "OpiBackendServer.h"
-#include "NetworkConfig.h"
-#include "SmtpConfig.h"
-#include "FetchmailConfig.h"
-#include "MailConfig.h"
 #include "Config.h"
 
 #include <libutils/Logger.h>
@@ -10,11 +6,16 @@
 #include <libutils/FileUtils.h>
 #include <libutils/ConfigFile.h>
 #include <libutils/UserGroups.h>
+#include <libutils/Process.h>
 
 #include <libopi/DnsServer.h>
 #include <libopi/AuthServer.h>
 #include <libopi/CryptoHelper.h>
 #include <libopi/ServiceHelper.h>
+#include <libopi/NetworkConfig.h>
+#include <libopi/SmtpConfig.h>
+#include <libopi/FetchmailConfig.h>
+#include <libopi/MailConfig.h>
 
 #include <algorithm>
 
@@ -1013,8 +1014,8 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	this->SendOK(client, cmd);
 	if(backend == "remote" || backend == "local")
 	{
-		this->ExecCmd((char*) BACKUP_MOUNT_FS);
-		this->ExecCmd((char*) BACKUP_LINK);
+		Process::Exec( BACKUP_MOUNT_FS);
+		Process::Exec( BACKUP_LINK);
 	}
 
 }
@@ -1033,7 +1034,8 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 	Json::Value parsedFromString;
 	bool parsingSuccessful;
 
-	jsonMessage = ExecCmd((char*) BACKUP_GET_QUOTA );
+	tie(ignore,jsonMessage) = Process::Exec( BACKUP_GET_QUOTA );
+
 	parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
 	this->SendOK(client, cmd, parsedFromString);
 }
@@ -2174,68 +2176,12 @@ string OpiBackendServer::BackendLogin(const string &unit_id)
 {
 	AuthServer s( unit_id);
 
-	CryptoHelper::RSAWrapper c;
-	Secop secop;
-	secop.SockAuth();
-
-	list<map<string,string>> ids =  secop.AppGetIdentifiers("op-backend");
-
-	if( ids.size() == 0 )
-	{
-		logg << Logger::Error << "Failed to get keys from secop"<<lend;
-		return "";
-	}
-
-	bool found = false;
-	for(auto id : ids )
-	{
-		if( id.find("type") != id.end() )
-		{
-			if( id["type"] == "backendkeys" )
-			{
-				// Key found
-				c.LoadPrivKeyFromDER( CryptoHelper::Base64Decode( id["privkey"]) );
-				c.LoadPubKeyFromDER( CryptoHelper::Base64Decode( id["pubkey"]) );
-				found = true;
-				break;
-			}
-		}
-	}
-
-	if( ! found )
-	{
-		logg << Logger::Error << "failed to load keys from secop"<<lend;
-		return "";
-	}
-
-	string challenge;
 	int resultcode;
-	tie(resultcode,challenge) = s.GetChallenge();
+	Json::Value ret;
 
-	if( resultcode != 200 )
-	{
-		logg << Logger::Error << "Unknown reply of server "<<resultcode<< lend;
-		return "";
-	}
+	tie(resultcode, ret) = s.Login();
 
-	string signedchallenge = CryptoHelper::Base64Encode( c.SignMessage( challenge ) );
-
-	Json::Value rep;
-	tie(resultcode, rep) = s.SendSignedChallenge( signedchallenge );
-
-	if( resultcode != 200 )
-	{
-		logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
-		return "";
-	}
-
-	if( rep.isMember("token") && rep["token"].isString() )
-	{
-		return rep["token"].asString();
-	}
-
-	return "";
-
+	return resultcode == 200 ? ret["token"].asString() : "";
 }
 
 void OpiBackendServer::ReapClients()
@@ -2327,23 +2273,6 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 	}
 
 	this->SendReply(client, ret);
-}
-
-// Local helper functions
-
-string OpiBackendServer::ExecCmd(const char* cmd)
-{
-	FILE* pipe = popen(cmd, "r");
-	if (!pipe) return "ERROR";
-	char buffer[128];
-	std::string result = "";
-	while(!feof(pipe))
-	{
-		if(fgets(buffer, 128, pipe) != NULL)
-			result += buffer;
-	}
-	pclose(pipe);
-	return result;
 }
 
 static inline bool

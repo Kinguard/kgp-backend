@@ -89,8 +89,6 @@ private:
 	void DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	// Helper functions
-	string ExecCmd(const char *$cmd);
-
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
 	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
 
