@@ -5,3 +5,4 @@ debian/*.debhelper.*
 debian/*.substvars
 obj-x86_64*
 CMakeLists.txt.user
+pytest/.pydevproject
