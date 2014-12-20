@@ -1910,7 +1910,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.ChangeDomain(oldopiname,hostname);
+	mc.ChangeDomain(oldopiname+".op-i.me",hostname+".op-i.me");
 	mc.WriteConfig();
 
 	this->SendOK(client, cmd);
