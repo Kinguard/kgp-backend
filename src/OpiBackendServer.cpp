@@ -1862,6 +1862,10 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
+	// Update sysconfig with new name
+	c["opi_name"] = hostname;
+	c.Sync();
+
 	/* Get a signed certificate for the new name */
 	string token = this->BackendLogin( unit_id );
 	if( token == "" )
