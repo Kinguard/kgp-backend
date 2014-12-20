@@ -1,3 +1,11 @@
+opi-backend (1.12.5) vili; urgency=low
+
+  * Fix writing new opi-name to sysconfig #197
+  * Use full domain when updating domainchange on email
+  * Reload nginx config instead of restart
+
+ -- Tor Krill <tor@openproducts.se>  Sat, 20 Dec 2014 15:04:12 +0100
+
 opi-backend (1.12.4) vili; urgency=low
 
   * Refactor helpers into libopi
