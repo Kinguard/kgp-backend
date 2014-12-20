@@ -1918,8 +1918,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	/* Restart related services */
 	update_postfix();
 
-	ServiceHelper::Stop("nginx");
-	ServiceHelper::Start("nginx");
+	ServiceHelper::Reload("nginx");
 }
 
 void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
