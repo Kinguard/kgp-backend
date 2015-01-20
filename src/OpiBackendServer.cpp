@@ -458,6 +458,8 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 	}
 	string user =		cmd["username"].asString();
 
+	// TODO: Validate that user exists!
+
 	// Get fetchmail addresses
 	FetchmailConfig fc( FETCHMAILRC );
 	list<map<string,string>> accounts = fc.GetAccounts(user);
@@ -477,7 +479,10 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 		list<tuple<string, string> > addresses = mc.GetAddresses( domain );
 		for( auto address: addresses )
 		{
-			ids.append(get<0>(address)+"@"+domain);
+			if( user == get<1>(address) )
+			{
+				ids.append(get<0>(address)+"@"+domain);
+			}
 		}
 	}
 
