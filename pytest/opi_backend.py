@@ -89,6 +89,13 @@ class OPIBackend( Client ):
 		req["username"] = user
 		return self._dorequest(req, dump)
 
+	def getuseridentities(self, token, user, dump = defaultdump):
+		req = {}
+		req["cmd"] = "getuseridentities"
+		req["token"] = token
+		req["username"] = user
+		return self._dorequest(req, dump)
+
 	def userexists(self, user, dump = defaultdump):
 		req = {}
 		req["cmd"] = "getuserexists"

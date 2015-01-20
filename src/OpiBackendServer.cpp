@@ -107,6 +107,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["updateuser"]=&OpiBackendServer::DoUpdateUser;
 	this->actions["deleteuser"]=&OpiBackendServer::DoDeleteUser;
 	this->actions["getuser"]=&OpiBackendServer::DoGetUser;
+	this->actions["getuseridentities"]=&OpiBackendServer::DoGetUserIdentities;
 	this->actions["getuserexists"]=&OpiBackendServer::DoUserExists;
 	this->actions["getusers"]=&OpiBackendServer::DoGetUsers;
 	this->actions["getusergroups"]=&OpiBackendServer::DoGetUserGroups;
@@ -438,6 +439,50 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 	}
 
 	Json::Value ret = this->GetUser(token, user);
+
+	this->SendOK(client, cmd,ret);
+}
+
+void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do get user identities");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+	{
+		return;
+	}
+	string user =		cmd["username"].asString();
+
+	// Get fetchmail addresses
+	FetchmailConfig fc( FETCHMAILRC );
+	list<map<string,string>> accounts = fc.GetAccounts(user);
+
+	Json::Value ids(Json::arrayValue);
+	for( auto& account: accounts )
+	{
+		ids.append(account["email"]);
+	}
+
+	// Get all smtp addresses
+	MailConfig mc;
+
+	list<string> domains = mc.GetDomains();
+	for( const string& domain: domains)
+	{
+		list<tuple<string, string> > addresses = mc.GetAddresses( domain );
+		for( auto address: addresses )
+		{
+			ids.append(get<0>(address)+"@"+domain);
+		}
+	}
+
+	Json::Value ret;
+	ret["identities"] = ids;
 
 	this->SendOK(client, cmd,ret);
 }

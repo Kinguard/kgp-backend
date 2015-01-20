@@ -38,6 +38,7 @@ private:
 	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoDeleteUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetUserIdentities(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUserExists(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
