@@ -1,3 +1,9 @@
+opi-backend (1.13.0) vili; urgency=medium
+
+  *  Initial implementation of get user identities
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 20 Jan 2015 19:53:27 +0100
+
 opi-backend (1.12.5) vili; urgency=low
 
   * Fix writing new opi-name to sysconfig #197
