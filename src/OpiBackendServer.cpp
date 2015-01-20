@@ -456,6 +456,12 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 	{
 		return;
 	}
+
+	if( ! this->CheckIsAdminOrUser( client, cmd) )
+	{
+		return;
+	}
+
 	string user =		cmd["username"].asString();
 
 	// TODO: Validate that user exists!
