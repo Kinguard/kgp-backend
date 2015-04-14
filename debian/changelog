@@ -1,3 +1,9 @@
+opi-backend (1.13.2) vili; urgency=medium
+
+  * Update updatefetchmailaccount to allow all fields to be changed
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 14 Apr 2015 11:58:38 +0200
+
 opi-backend (1.13.1) vili; urgency=medium
 
   * Make sure opi-backend terminates on shutdown #246

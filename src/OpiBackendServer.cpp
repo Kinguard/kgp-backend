@@ -71,6 +71,9 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_RCV, "receive",		ArgCheckType::BOOL },
 	});
 
+// Forwards
+static bool CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type);
+
 // Convenience class for debug/trace
 class ScopedLog: public NoCopy
 {
@@ -1740,8 +1743,23 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
+	// Non common arguments check
+	if( ! CheckArgument( cmd, "origidentity",ArgCheckType::STRING) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
+	if( ! CheckArgument( cmd, "orighostname",ArgCheckType::STRING) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
 	string email = cmd["email"].asString();
+	string ohost = cmd["orighostname"].asString();
 	string host = cmd["hostname"].asString();
+	string oid = cmd["origidentity"].asString();
 	string id = cmd["identity"].asString();
 	string pwd = cmd["password"].asString();
 	string user = cmd["username"].asString();
@@ -1756,7 +1774,26 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 
 	FetchmailConfig fc( FETCHMAILRC );
 
-	fc.UpdateAccount(email, host, id, pwd, user, ssl == "true" );
+	if( (ohost != host) || (oid != id ) )
+	{
+		// We have updated id fields, need to re-add account
+		map<string,string> acc = fc.GetAccount(ohost, oid);
+
+		fc.DeleteAccount(ohost, oid);
+
+		acc["email"] =		(email != "" ) ? email : acc["email"];
+		acc["host"] =		host;
+		acc["identity"]	=	id;
+		acc["username"] =	(user != "") ? user : acc["username"];
+		acc["password"] =	(pwd != "") ? pwd : acc["password"];
+		acc["ssl"] =		(ssl != "") ? ssl : acc["ssl"];
+
+		fc.AddAccount(acc["email"],acc["host"],acc["identity"],acc["password"],acc["username"],acc["ssl"]=="true");
+	}
+	else
+	{
+		fc.UpdateAccount(email, host, id, pwd, user, ssl == "true" );
+	}
 	fc.WriteConfig();
 	restart_fetchmail();
 
