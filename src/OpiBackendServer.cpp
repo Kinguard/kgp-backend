@@ -1942,6 +1942,15 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	string oldopiname = c.ValueOrDefault("opi_name");
 	string hostname = cmd["hostname"].asString();
 
+	if( hostname == oldopiname)
+	{
+		// no need to do any updates on server side
+		// make sure dns is enabled and return vith OK
+		c["dnsenabled"] = "1";
+		c.Sync();
+		this->SendOK(client, cmd);
+		return;
+	}
 	if( unit_id == "" )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to retrieve unit id");
