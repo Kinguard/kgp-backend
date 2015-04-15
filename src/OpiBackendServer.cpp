@@ -153,6 +153,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
+	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
 
 	this->actions["setnetworksettings"]=&OpiBackendServer::DoNetworkSetSettings;
 	this->actions["getnetworksettings"]=&OpiBackendServer::DoNetworkGetSettings;
@@ -1906,6 +1907,7 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 	{
 		ConfigFile c(SYS_INFO);
 		res["opiname"] = c.ValueOrDefault("opi_name");
+		res["dnsenabled"] = c.ValueOrDefault("dnsenabled");
 		this->SendOK(client, cmd, res);
 	}
 	else
@@ -1957,6 +1959,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	// Update sysconfig with new name
 	c["opi_name"] = hostname;
+	c["dnsenabled"] = "1";
 	c.Sync();
 
 	/* Get a signed certificate for the new name */
@@ -2012,6 +2015,27 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	update_postfix();
 
 	ServiceHelper::Reload("nginx");
+}
+
+void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Disalbe OPI DNS");
+
+	if( ! this->CheckLoggedIn(client,cmd) )
+	{
+		return;
+	}
+
+	if( ! File::FileExists( SYS_INFO ) )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
+		return;
+	}
+
+	ConfigFile c(SYS_INFO);
+	c["dnsenabled"] = "0";
+	c.Sync();
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
