@@ -356,6 +356,14 @@ class OPIBackend( Client ):
 		req["hostname"] = hostname
 		return self._dorequest(req, dump)
 
+	def disabledns(self, token, dump = defaultdump):
+		req = {}
+		req["cmd"] = "networkdisabledns"
+		req["token"] = token
+		req["dnsenabled"] = "0"
+
+		return self._dorequest(req, dump)
+
 	def setnetworksettings(self, token, cfgtype, ipnumber, netmask, gateway, dns, dump = defaultdump):
 		req = {}
 		req["cmd"] = "setnetworksettings"
