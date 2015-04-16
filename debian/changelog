@@ -1,8 +1,20 @@
-opi-backend (1.13.3) vili; urgency=medium
+opi-backend (1.13.5) vili; urgency=medium
 
   * Make sure user is deleted in OC userdb as well
 
  -- Tor Krill <tor@openproducts.se>  Thu, 16 Apr 2015 16:16:52 +0200
+
+opi-backend (1.13.4) vili; urgency=low
+
+  * Only update OPI name on serverside if it has changed.
+
+ -- PA Nilsson <pa@openproducts.se>  Wed, 15 Apr 2015 20:16:32 +0200
+
+opi-backend (1.13.3) vili; urgency=low
+
+  * Added support to turn off DNS service
+
+ -- PA Nilsson <pa@openproducts.se>  Wed, 15 Apr 2015 11:08:08 +0200
 
 opi-backend (1.13.2) vili; urgency=medium
 
