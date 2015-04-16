@@ -392,6 +392,16 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	if( wasadmin )
 	{
 		removeuserfrommailadmin( user );
+
+		// Possibly remove user from OC internal user-db
+		if( File::FileExists( OC_CLEAN_SCRIPT ) )
+		{
+			Process::Exec( OC_CLEAN_SCRIPT );
+		}
+		else
+		{
+			logg << Logger::Error << "Missing OC clean script ["<< OC_CLEAN_SCRIPT << "]" << lend;
+		}
 	}
 
 	// Remove user from local mail

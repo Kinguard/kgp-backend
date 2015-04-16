@@ -46,6 +46,8 @@
 
 #define SYS_INFO "/etc/opi/sysinfo.conf"
 
+#define OC_CLEAN_SCRIPT "/etc/opi-control/restore/owncloud-reinstall"
+
 #define OPI_NETIF	"eth0"
 
 #define OP_RELAYSERVER	"op-mail.openproducts.com"

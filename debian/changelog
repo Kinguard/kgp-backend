@@ -1,3 +1,9 @@
+opi-backend (1.13.3) vili; urgency=medium
+
+  * Make sure user is deleted in OC userdb as well
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 16 Apr 2015 16:16:52 +0200
+
 opi-backend (1.13.2) vili; urgency=medium
 
   * Update updatefetchmailaccount to allow all fields to be changed
