@@ -1,3 +1,9 @@
+opi-backend (1.13.7) vili; urgency=medium
+
+  * Fix config read to resolve dyndns not being displayed #280
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 20 Apr 2015 14:07:07 +0200
+
 opi-backend (1.13.6) vili; urgency=medium
 
   * Rebuild against newer libopi

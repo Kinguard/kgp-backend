@@ -1917,7 +1917,7 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 	{
 		ConfigFile c(SYS_INFO);
 		res["opiname"] = c.ValueOrDefault("opi_name");
-		res["dnsenabled"] = c.ValueOrDefault("dnsenabled");
+		res["dnsenabled"] = c.ValueOrDefault("dnsenabled","1");
 		this->SendOK(client, cmd, res);
 	}
 	else
