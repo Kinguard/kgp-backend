@@ -43,6 +43,11 @@
 #define BACKUP_MOUNT_FS "/usr/share/opi-backup/mount_fs.sh"
 #define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 #define ACCESS_CONFIG "/etc/opi/opi-access.conf"
+#define CERT_INFO "/etc/kinguard/kinguard-certhandler.conf"
+#define DEFAULT_USERCERT_PATH "/etc/kinguard/usercerts/"
+#define WEB_CERT "/etc/opi/web_cert.pem"
+#define WEB_KEY "/etc/opi/web_key.pem"
+#define DEFAULT_CERT "opi.cert"
 
 #define SYS_INFO "/etc/opi/sysinfo.conf"
 

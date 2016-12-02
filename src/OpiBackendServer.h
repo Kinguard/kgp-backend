@@ -85,6 +85,9 @@ private:
 	void DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	void DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
@@ -100,6 +103,9 @@ private:
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
 
+	bool verifyCertificate( string certificate, string type );
+	bool writeCertificate( string certificate, string &newFile, string oldFile );
+	string getTmpFile(string path, string suffix);
 	string BackendLogin(const string& unit_id);
 
 	// Lifecycle management

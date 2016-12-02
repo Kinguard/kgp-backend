@@ -18,6 +18,8 @@
 #include <libopi/MailConfig.h>
 
 #include <algorithm>
+#include <unistd.h>
+#include <uuid/uuid.h>
 
 /*
  * Bit patterns for argument checks
@@ -154,6 +156,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
 	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
+	this->actions["networkgetcert"]=&OpiBackendServer::DoNetworkGetCert;
+	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
+	this->actions["networkcheckcert"]=&OpiBackendServer::DoNetworkCheckCert;
 
 	this->actions["setnetworksettings"]=&OpiBackendServer::DoNetworkSetSettings;
 	this->actions["getnetworksettings"]=&OpiBackendServer::DoNetworkGetSettings;
@@ -2057,6 +2062,219 @@ void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Js
 	this->SendOK(client, cmd);
 }
 
+void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Get Webserver Certificates");
+	Json::Value cfg;
+	string CustomCertFile,CustomKeyFile;
+
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+	{
+		return;
+	}
+
+	if( ! File::FileExists( CERT_INFO ) )
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to read certificate info file");
+		return;
+	}
+
+	ConfigFile c(CERT_INFO);
+
+	cfg["CertType"] = c.ValueOrDefault("BACKEND");
+	CustomCertFile = c.ValueOrDefault("CERT");
+
+	if ( File::FileExists( CustomCertFile ) )
+	{
+		cfg["CustomCertVal"] = File::GetContentAsString(CustomCertFile, true);
+	}
+	else
+	{
+		cfg["CustomCertVal"] = "";
+
+	}
+
+	if ( cfg["CertType"] == "LETSENCRYPT" )
+	{
+		// test to see if signed cert is used, if it could not be generated there is a fallback to default self singed certificate
+	    char buff[PATH_MAX];
+	    string certpath;
+	    ssize_t len = ::readlink(WEB_CERT, buff, sizeof(buff)-1);
+	    if (len != -1)
+	    {
+	    	buff[len] = '\0';
+	    	certpath=std::string(buff);
+	    	if ( certpath == DEFAULT_CERT )
+	    	{
+	    		cfg["CertStatus"] = "ERROR";
+	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
+	    	}
+	    }
+	}
+
+
+	this->SendOK( client, cmd, cfg);
+}
+
+void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Set Webserver Certificates");
+
+	string CustomCertFile,CustomKeyFile;
+
+	string certtype = cmd["CertType"].asString();
+	string certificate = cmd["CustomCertVal"].asString();
+	string key = cmd["CustomKeyVal"].asString();
+	int linkval;
+
+	if (certtype == "LETSENCRYPT") 
+	{
+		ConfigFile c(CERT_INFO);
+		c["BACKEND"]=certtype;
+		c.Sync();
+		this->SendOK( client, cmd);
+	}
+	else if (certtype == "CUSTOMCERT")
+	{
+		if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+		{
+			this->SendErrorMessage( client, cmd, 404, "Unauthorized");
+			return;
+		}
+
+		if( ! File::FileExists( CERT_INFO ) )
+		{
+			this->SendErrorMessage( client, cmd, 500, "Failed to read certificate info file");
+			return;
+		}
+
+		bool valid_cert = this->verifyCertificate(certificate,"cert");
+		bool valid_key =  this->verifyCertificate(key,"key");
+		
+		if ( ! (  valid_cert && valid_key ) )
+		{
+			logg << Logger::Debug << "Combination of certs not valid" << lend;
+			if ( valid_cert )
+			{
+				this->SendErrorMessage( client, cmd, 400, "Failed to verify Private Key, possibly missing file or uploaded data.");
+			}
+			else if ( valid_key )
+			{
+				this->SendErrorMessage( client, cmd, 400, "Failed to verify Certificate");
+			}
+			else
+			{
+				this->SendErrorMessage( client, cmd, 400, "Failed to verify certificate and key");
+			}
+			return;
+		}
+
+		// INPUT VALIDATED, WRITE FILES
+		logg << Logger::Debug << "Certificates seem to be Valid" << lend;
+		ConfigFile c(CERT_INFO);
+
+		CustomKeyFile = c.ValueOrDefault("KEY");
+		CustomCertFile = c.ValueOrDefault("CERT");
+
+	 	string keyFilename = this->getTmpFile(DEFAULT_USERCERT_PATH,".key");
+	 	string certFilename = this->getTmpFile(DEFAULT_USERCERT_PATH,".cert");
+
+		if ( key.length() )
+		{
+			if (! this->writeCertificate(key,keyFilename,CustomKeyFile) )
+			{
+				this->SendErrorMessage( client, cmd, 500, "Failed to write key to file");
+				return;
+			}
+
+		} else {
+			// using existing key on file, since no key is posted we have validated the key 
+			// already on file otherwise we can not come here.
+			logg << Logger::Debug << "Using Private Key from file" << lend;
+			keyFilename = CustomKeyFile;
+		}
+		if (! this->writeCertificate(certificate,certFilename,CustomCertFile) )
+		{
+			this->SendErrorMessage( client, cmd, 500, "Failed to write certificate to file");
+			return;
+		}
+
+		// create a backup copy of the cert symlinks nginx uses
+		string curr_key,curr_cert;
+		curr_key = File::RealPath(WEB_KEY);
+		curr_cert = File::RealPath(WEB_CERT);
+
+		File::Delete(WEB_CERT);
+		File::Delete(WEB_KEY);
+
+		linkval=symlink(certFilename.c_str(),WEB_CERT);
+		linkval=symlink(keyFilename.c_str(),WEB_KEY);
+
+		// new links should now be in place, let nginx test the config
+		int retval;
+		string Message;
+
+		tie(retval,Message)=Process::Exec( "nginx -t" );
+		if ( retval )
+		{
+			// update config file
+			c["KEY"] = keyFilename;
+			c["CERT"] = certFilename;
+			c["BACKEND"]=certtype;
+			c.Sync();
+
+			// nginx config is correct, restart webserver
+			logg << Logger::Debug << "Restarting Nginx" << lend;
+			ServiceHelper::Stop("nginx");
+			ServiceHelper::Start("nginx");
+		}
+		else
+		{
+			// nginx config test failed, restore old links
+			logg << Logger::Debug << "Nginx config test failed" << lend;
+			File::Delete(WEB_CERT);
+			File::Delete(WEB_KEY);
+
+			linkval=symlink(curr_cert.c_str(),WEB_CERT);
+			linkval=symlink(curr_key.c_str(),WEB_KEY);
+
+			this->SendErrorMessage( client, cmd, 500, "Webserver config test failed with new certificates");
+			return;
+
+		}
+		this->SendOK( client, cmd);
+	}
+	else 
+	{
+		this->SendErrorMessage( client, cmd, 500, "Unable to handle certificate requests");
+		return;
+	}
+
+
+}
+
+void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+	ScopedLog l("Check Webserver Certificates");
+
+	string type = cmd["type"].asString();
+	string certificate = cmd["CertVal"].asString();
+	
+	bool res;
+
+	res = this->verifyCertificate(certificate,type);
+	if ( res )
+	{
+		this->SendOK( client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 400, "Failed to verify certificate/key");
+	}
+
+}
+
+
 void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Get network settings");
@@ -2452,3 +2670,126 @@ bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int wha
 	return true;
 }
 
+bool OpiBackendServer::verifyCertificate(string cert, string type)
+{
+	logg << Logger::Debug << "Verify Certificate" << lend;
+
+	int retval=1, sslret=0;
+	string Message;
+
+	string CustomKeyFile, opensslscript;
+	string tmpFile=this->getTmpFile("/tmp/",".key");
+	string tmpSplitCert=this->getTmpFile("/tmp/",".part");
+
+	if ( type == "key" && ! cert.length())
+	{
+		// no key was passed in the post, try to use existing one on file
+		if( ! File::FileExists( CERT_INFO ) )
+		{
+			return false;
+		}
+
+		ConfigFile c(CERT_INFO);
+		CustomKeyFile = c.ValueOrDefault("KEY");
+
+		if( ! File::FileExists( CustomKeyFile ) )
+		{
+			return false;
+		}
+		else
+		{
+			logg << Logger::Debug << "Reading Private Key from file" << lend;
+			opensslscript ="openssl rsa -check -noout -in " + CustomKeyFile;
+			tie(retval,Message)=Process::Exec( opensslscript );
+		}
+	}
+	else
+	{
+		if ( type == "key" )
+		{
+			File::Write( tmpFile, cert, 0600);		
+			opensslscript ="openssl rsa -check -noout -in " + tmpFile;
+			tie(retval,Message)=Process::Exec( opensslscript );
+			if ( File::FileExists( tmpFile) )
+			{
+				File::Delete( tmpFile );
+			}
+		}
+		else if ( type == "cert" )
+		{
+			// check for multiple certs
+
+			std::string delimiter = "-----END CERTIFICATE-----";
+
+			size_t pos = 0;
+			std::string token;
+			int count=0;
+			while ((pos = cert.find(delimiter)) != std::string::npos) {
+				count++;
+			    token = cert.substr(0, pos+delimiter.length());
+				File::Write( tmpSplitCert, token, 0600);		
+			    cert.erase(0, pos+delimiter.length());
+				opensslscript ="openssl x509 -text -noout -in " + tmpSplitCert;
+				tie(sslret,Message)=Process::Exec( opensslscript );
+				if ( File::FileExists( tmpSplitCert) )
+				{
+					File::Delete( tmpSplitCert );
+				}
+				retval &= sslret;
+
+			}
+			retval &= sslret;
+
+		}	
+		else
+		{
+			logg << Logger::Debug << "Unknown certificate type" << lend;
+			return false;
+		}
+	}	
+
+	return retval;
+}
+
+
+bool OpiBackendServer::writeCertificate(string cert, string &newFile, string oldFile)
+{
+	std::size_t fileHash=0;
+	std::size_t certHash=0;
+	string filepath = File::GetPath(newFile);
+
+	if ( File::FileExists(oldFile) )
+	{
+		fileHash = std::hash<std::string>{}(File::GetContentAsString(oldFile, true));
+	}
+	certHash = std::hash<std::string>{}(cert);
+
+	// check if the files are the same
+	if (fileHash == certHash ) 
+	{
+		logg << Logger::Debug << "Received data is the same as already on file." << lend;
+		newFile = oldFile;
+	}
+	else
+	{
+	 	// write Private Key file
+	 	if (! File::DirExists( filepath) )
+	 	{
+	 		File::MkPath(filepath, 0755);
+	 	}
+	 	File::Write( newFile,cert,600);
+	}
+	return true;
+}
+
+string OpiBackendServer::getTmpFile(string path,string suffix)
+{
+	string filename;
+	filename = path+String::UUID()+suffix;
+
+	while( File::FileExists( filename ))
+	{
+		filename = path+String::UUID()+suffix;		
+	}
+	return filename;
+}
