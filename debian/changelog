@@ -2,7 +2,7 @@ opi-backend (1.13.9) vili; urgency=medium
 
   * Rework socket read to try recover partial read
 
- -- Tor Krill <tor@openproducts.se>  Mon, 05 Dec 2016 15:55:56 +0000
+ -- PA Nilsson <pa@openproducts.se>  Mon, 05 Dec 2016 15:55:56 +0000
 
 opi-backend (1.13.8) vili; urgency=medium
 
