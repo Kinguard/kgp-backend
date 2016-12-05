@@ -174,6 +174,8 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->lastreap = time(NULL);
 }
 
+#define BUFSIZE (64*1024)
+
 void OpiBackendServer::Dispatch(SocketPtr con)
 {
 	ScopedLog l("Dispatch");
@@ -181,20 +183,25 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 	// Convert into unixsocket
 	UnixStreamClientSocketPtr sock = static_pointer_cast<UnixStreamClientSocket>(con);
 
-	char buf[64*1024];
-	size_t rd;
+	char buf[BUFSIZE];
+	size_t rd, rd_total=0;
+	int retries = 5;
 
 	try
 	{
-		while( (rd = sock->Read(buf, sizeof(buf))) > 0 )
+		while( (rd = sock->Read(&buf[rd_total], BUFSIZE - rd_total )) > 0 )
 		{
-			logg << "Read request of socket"<<lend;
+			rd_total += rd;
+
+			logg << "Read request of socket (" <<rd << "/"<<rd_total << ") bytes"<<lend;
 			Json::Value req;
-			if( reader.parse(buf, buf+rd, req) )
+			if( reader.parse(buf, buf+rd_total, req) )
 			{
 				if( req.isMember("cmd") && req["cmd"].isString() )
 				{
 					this->ProcessOneCommand(sock, req);
+					retries = 5;
+					rd_total = 0;
 				}
 				else
 				{
@@ -204,8 +211,11 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 			}
 			else
 			{
-				this->SendErrorMessage(sock, Json::Value::null, 4, "Unable to parse request");
-				break;
+				if( retries-- == 0 )
+				{
+					this->SendErrorMessage(sock, Json::Value::null, 4, "Unable to parse request");
+					break;
+				}
 			}
 		}
 	}
