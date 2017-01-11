@@ -1034,15 +1034,22 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 	{
 		ConfigFile c(BACKUP_CONFIG);
 		backend = c.ValueOrDefault("backend");
+		logg << Logger::Error << "Backend: " << backend <<lend;
+
 		if(backend == "s3op://")
 		{
 			res["enabled"] = true;
-			res["location"] = "remote";
+			res["location"] = "op";
 		}
 		else if (backend == "local://")
 		{
 			res["enabled"] = true;
 			res["location"] = "local";
+		}
+		else if (backend == "s3://")
+		{
+			res["enabled"] = true;
+			res["location"] = "amazon";
 		}
 		else
 		{
