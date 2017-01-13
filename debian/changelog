@@ -1,3 +1,9 @@
+opi-backend (1.13.10) vili; urgency=medium
+
+  * Added support for amazon backup backend 
+
+ -- PA Nilsson <pa@openproducts.se>  Fri, 13 Jan 2017 09:12:25 +0000
+
 opi-backend (1.13.9) vili; urgency=medium
 
   * Rework socket read to try recover partial read
