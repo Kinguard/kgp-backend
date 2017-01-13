@@ -1110,6 +1110,11 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	else if (backend == "amazon")
 	{
 		c["backend"] = "s3://";
+		if(c.ValueOrDefault("bucket") != AWSbucket)
+		{
+			// bucket has changed, umount the backend to trigger new mount on next backup
+			Process::Exec( BACKUP_UMOUNT_FS);
+		}
 		c["bucket"] =  AWSbucket;
 		logg << Logger::Error << "-----  NEED TO WRITE AUTH CONFIG ----" <<lend;
 		/*
@@ -1127,7 +1132,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 
 	c.Sync(true, 0644);
 	this->SendOK(client, cmd);
-	if(backend == "remote" || backend == "local")
+	if(backend == "remote" || backend == "local" || backend == "amazon")
 	{
 		Process::Exec( BACKUP_MOUNT_FS);
 		Process::Exec( BACKUP_LINK);
