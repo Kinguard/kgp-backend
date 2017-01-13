@@ -1166,6 +1166,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 
 	Json::Value res(Json::objectValue);
 	struct stat filestatus;
+	string log;
 
 	if( File::FileExists( BACKUP_ALERT ))
 	{
@@ -1185,16 +1186,19 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 	else
 	{
 		res["backup_status"] = "Successful";
-		res["info"] = "";
 
 		if( File::DirExists( BACKUP_COMPLETE ))
 		{
 			stat( BACKUP_COMPLETE , &filestatus );
 			res["date"] = to_string(filestatus.st_mtime);
+			log = File::GetContentAsString( BACKUP_LASTTARGET ,true );
+			res["info"] = log;
+			logg << Logger::Error << log <<lend;
 		}
 		else
 		{
 			res["date"] = "";
+			res["info"] = "";
 		}
 	}
 
