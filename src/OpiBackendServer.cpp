@@ -1020,7 +1020,7 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
-	string backend;
+	string backend,key;
 	string type;
 
 	ScopedLog l("Get backup settings");
@@ -1058,6 +1058,15 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 		}
 		res["type"] = c.ValueOrDefault("type");
 
+		// always return any AWS config found.
+		res["AWSbucket"] = c.ValueOrDefault("bucket");
+		/*
+		ConfigFile aws(BACKUP_AUTH);
+		res["AWSkey"] = aws.ValueOrDefault("backend-login");
+		*/
+		res["AWSkey"] = "AKIAJ74K2OEC7PYUIPAA";
+		logg << Logger::Error << "-----  DUMMY VALUE RETRURNED ----" <<lend;
+
 		this->SendOK(client, cmd, res);
 	}
 	else
@@ -1073,6 +1082,9 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	ScopedLog l("Set backup settings");
 	string type = cmd["type"].asString();
 	string backend = cmd["location"].asString();
+	string AWSkey = cmd["AWSkey"].asString();
+	string AWSseckey = cmd["AWSseckey"].asString();
+	string AWSbucket = cmd["AWSbucket"].asString();
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
@@ -1091,9 +1103,20 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	{
 		c["backend"] = "local://";
 	}
-	else if (backend == "remote")
+	else if (backend == "op")
 	{
 		c["backend"] = "s3op://";
+	}
+	else if (backend == "amazon")
+	{
+		c["backend"] = "s3://";
+		c["bucket"] =  AWSbucket;
+		logg << Logger::Error << "-----  NEED TO WRITE AUTH CONFIG ----" <<lend;
+		/*
+		ConfigFile aws( BACKUP_AUTH );
+		aws['backend-login'] = AWSkey;
+		aws['backend-password'] = AWSseckey;
+		*/
 	}
 	else
 	{
@@ -1153,11 +1176,17 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 			stat( BACKUP_ERRORS , &filestatus );
 			res["date"] = to_string(filestatus.st_mtime);
 		}
+		if( File::FileExists( BACKUP_LOG )) 
+		{
+			res["log"] = File::GetContentAsString( BACKUP_LOG ,true );
+			logg << Logger::Error << "Sending log file" <<lend;
+		}
 	}
 	else
 	{
 		res["backup_status"] = "Successful";
 		res["info"] = "";
+
 		if( File::DirExists( BACKUP_COMPLETE ))
 		{
 			stat( BACKUP_COMPLETE , &filestatus );
