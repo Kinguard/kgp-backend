@@ -7,6 +7,7 @@
 #include <libutils/ConfigFile.h>
 #include <libutils/UserGroups.h>
 #include <libutils/Process.h>
+#include <libutils/Regex.h>
 
 #include <libopi/DnsServer.h>
 #include <libopi/AuthServer.h>
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
+#include <regex>
 
 /*
  * Bit patterns for argument checks
@@ -166,6 +168,14 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["getshellsettings"]=&OpiBackendServer::DoShellGetSettings;
 	this->actions["doshellenable"]=&OpiBackendServer::DoShellEnable;
 	this->actions["doshelldisable"]=&OpiBackendServer::DoShellDisable;
+
+
+	this->actions["dosystemgetmessages"]=&OpiBackendServer::DoSystemGetMessages;
+	this->actions["dosystemackmessage"]=&OpiBackendServer::DoSystemAckMessage;
+	this->actions["dosystemgetstatus"]=&OpiBackendServer::DoSystemGetStatus;
+	this->actions["dosystemgetstorage"]=&OpiBackendServer::DoSystemGetStorage;
+	this->actions["dosystemgetpackages"]=&OpiBackendServer::DoSystemGetPackages;
+
 
 	// Setup mail paths etc
 	postfix_fixpaths();
@@ -1060,12 +1070,11 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 
 		// always return any AWS config found.
 		res["AWSbucket"] = c.ValueOrDefault("bucket");
-		/*
-		ConfigFile aws(BACKUP_AUTH);
+
+
+		IniFile aws(BACKUP_AUTH,":");
+		aws.UseSection("s3");
 		res["AWSkey"] = aws.ValueOrDefault("backend-login");
-		*/
-		res["AWSkey"] = "AKIAJ74K2OEC7PYUIPAA";
-		logg << Logger::Error << "-----  DUMMY VALUE RETRURNED ----" <<lend;
 
 		this->SendOK(client, cmd, res);
 	}
@@ -1116,12 +1125,19 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 			Process::Exec( BACKUP_UMOUNT_FS);
 		}
 		c["bucket"] =  AWSbucket;
-		logg << Logger::Error << "-----  NEED TO WRITE AUTH CONFIG ----" <<lend;
-		/*
-		ConfigFile aws( BACKUP_AUTH );
-		aws['backend-login'] = AWSkey;
-		aws['backend-password'] = AWSseckey;
-		*/
+
+		IniFile aws(BACKUP_AUTH,":");
+		aws.UseSection("s3");
+
+		if ( AWSseckey.length()  > 0 ) 
+		{
+			// only write password if we get a new, it might already exist.
+			aws["s3"]["backend-password"] = AWSseckey;	
+		}
+		aws["s3"]["backend-login"] = AWSkey;
+		aws.Save();
+		
+
 	}
 	else
 	{
@@ -2512,6 +2528,183 @@ void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::V
 	this->SendOK(client, cmd);
 }
 
+
+void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Get Messages");
+	if( ! this->CheckLoggedIn(client,cmd)  )
+	{
+		return;
+	}
+
+	Json::Value messages(Json::arrayValue);
+	// return array of json encoded messages
+
+	// for each file in /var/spool/notify
+	if( File::DirExists(NOTIFY_DIR) ) {
+		list<string> files = File::Glob(NOTIFY_DIR "*");
+		for( const string& file: files)
+		{
+			messages.append(File::GetContentAsString(file, true));
+		}
+	}
+	else
+	{
+		logg << Logger::Debug << "Spool dir does not exist"<<lend;
+		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
+		return;
+	}
+	Json::Value ret;
+	ret["messages"] = messages;
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Dummy function for Do System Ack Message");
+	Json::Value ret;
+	
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		this->SendErrorMessage(client, cmd, 404, "Forbidden");
+		return;
+	}
+	// Manually verify
+	if( !cmd.isMember("id") && !cmd["id"].isString() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+	logg << Logger::Debug << "Ack message with id: " << cmd["id"].asString() <<lend;
+
+	ret["deleted"] = cmd["id"];
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Get Status");
+	Json::Value ret;
+	string Message, uptimescript, tempscript;
+	int retval;
+
+	uptimescript ="/usr/bin/uptime -p";
+	tie(retval,Message)=Process::Exec( uptimescript );
+	if ( retval )
+	{
+		ret["uptime"]=Message.substr(3,string::npos);
+	}
+	else
+	{
+		ret["uptime"]=0;
+	}
+	tempscript = "/sys/class/thermal/thermal_zone0/temp"; // works on XU4...
+	if ( File::FileExists(tempscript) )
+	{
+		tie(retval,Message)=Process::Exec( "cat " + tempscript );
+		ret["temperature"]=Message;
+	} else {
+		ret["temperature"]=0;
+	}
+	this->SendOK(client, cmd, ret);
+}
+
+void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Get Storage");
+	Json::Value ret;
+	string ExecOutput, storagescript;
+	vector<string> storage;
+	
+	int retval;
+	
+	// prints only the line with the data partition and in the order of "total, used, available" in 1k blocks
+	storagescript ="df -l | grep \""+string(DATA_PARTITION)+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
+	tie(retval,ExecOutput)=Process::Exec( storagescript );
+	if ( retval )
+	{
+		String::Split(ExecOutput,storage," ");
+
+		ret["storage"]["total"]=storage[0];
+		ret["storage"]["used"]=storage[1];
+		ret["storage"]["available"]=storage[2];
+		
+		this->SendOK(client, cmd, ret);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 500, "Internal Error");
+	}
+		
+}
+
+void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Get Packages");
+	list<string> packages,dpkglist;
+	string packagescript, packagelist, ExecOutput;
+	bool valid_list=false;
+	Json::Value ret;
+	int retval;
+	Regex r;
+
+	if ( File::FileExists(PACKAGE_INFO) )
+	{
+		packagelist = "";
+		packages = File::GetContent(PACKAGE_INFO);
+		r.Compile("([^0-9a-zA-Z_\\-])");  // do not allow any weird characters i name....
+		for( auto package: packages )
+		{
+			if ( package.length() ) // do not include empty lines
+			{
+				
+				if ( r.DoMatch(package).size() )
+				{
+					logg << Logger::Debug << "PACKAGE NAME NOT SAFE for SHELL: " << package <<lend;
+				} else {
+					//logg << Logger::Debug << "SAFE PACKAGE NAME " << package <<lend;
+					packagelist += " "+package;
+					valid_list= true;
+				}
+				
+			}
+		}
+		if( valid_list )
+		{
+			packagescript = "dpkg -l "+packagelist +" | grep ^ii | awk '{print $2 \" \" $3}'";
+			tie(retval,ExecOutput)=Process::Exec( packagescript );
+		}
+		if (retval)
+		{
+			String::Split(ExecOutput,dpkglist,"\n");
+			for( auto pkg:dpkglist )
+			{
+				vector<string> curr_pkg;
+				String::Split(pkg,curr_pkg," ");
+				if ( curr_pkg.size() == 2 ) {
+					ret["packages"][curr_pkg[0]] = curr_pkg[1];
+				}
+				else
+				{
+					logg << Logger::Debug << "Illegal package length " << pkg.length() <<lend;
+				}
+			}
+			
+			this->SendOK(client, cmd, ret);
+		}
+		else
+		{
+			this->SendErrorMessage(client, cmd, 500, "Internal Error");
+		}
+	}
+	else
+	{
+		logg << Logger::Debug << "No package list available"<<lend;
+		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
+		return;
+	}
+}
+
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
 {
 	if( !req.isMember("token") && !req["token"].isString() )
@@ -2665,7 +2858,7 @@ void OpiBackendServer::SendErrorMessage(UnixStreamClientSocketPtr &client, const
 	Json::Value ret(Json::objectValue);
 	ret["status"]["value"]=errcode;
 	ret["status"]["desc"]=msg;
-
+	
 	this->SendReply(client, ret);
 }
 

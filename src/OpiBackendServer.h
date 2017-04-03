@@ -92,6 +92,13 @@ private:
 	void DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	
+	void DoSystemGetMessages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemAckMessage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
 
 	// Helper functions
 	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);

@@ -55,6 +55,10 @@
 #define DEFAULT_CERT "opi.cert"
 
 #define SYS_INFO "/etc/opi/sysinfo.conf"
+#define PACKAGE_INFO "/etc/opi/packageinfo.conf"
+
+#define NOTIFY_DIR "/var/spool/notify/"
+#define DATA_PARTITION "/var/opi"
 
 #define OC_CLEAN_SCRIPT "/etc/opi-control/restore/owncloud-reinstall"
 
