@@ -1,3 +1,4 @@
 shell/disable_shell.sh	/usr/share/opi-backend/
 shell/enable_shell.sh	/usr/share/opi-backend/
 shell/dropbear_*.deb	/usr/share/opi-backend/
+packageinfo.conf		/etc/opi/
