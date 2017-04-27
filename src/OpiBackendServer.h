@@ -13,6 +13,8 @@
 
 #include <libopi/Secop.h>
 
+#include <libkgpnotify/kgpNotify.h>
+
 #include "Config.h"
 
 #include "WebClient.h"

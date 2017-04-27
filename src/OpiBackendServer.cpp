@@ -2545,7 +2545,10 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 		list<string> files = File::Glob(NOTIFY_DIR "*");
 		for( const string& file: files)
 		{
-			messages.append(File::GetContentAsString(file, true));
+            if( File::FileExists(file) )
+            {
+                messages.append(File::GetContentAsString(file, true));
+            }
 		}
 	}
 	else
@@ -2561,7 +2564,7 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 
 void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
-	ScopedLog l("Dummy function for Do System Ack Message");
+    ScopedLog l("Do System Ack Message");
 	Json::Value ret;
 	
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
@@ -2576,6 +2579,8 @@ void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 	logg << Logger::Debug << "Ack message with id: " << cmd["id"].asString() <<lend;
+    Notify::ExistingMessage msg(cmd["id"].asString());
+    msg.Ack();
 
 	ret["deleted"] = cmd["id"];
 	this->SendOK(client, cmd, ret);

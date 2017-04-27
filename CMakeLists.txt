@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 
 include( FindPkgConfig )
 pkg_check_modules ( LIBOPI REQUIRED libopi>=1.5 )
+pkg_check_modules ( LIBNOTIFY REQUIRED libkgpnotify )
 
 set (OPIB_VERSION_MAJOR 1)
 set (OPIB_VERSION_MINOR 0)
@@ -36,7 +37,7 @@ include_directories (
 add_definitions( -std=c++11 )
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
-target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} )
+target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} ${LIBNOTIFY_LDFLAGS} -lkgpnotify)
 
 enable_testing()
 add_test( NAME TestApp COMMAND testapp )
