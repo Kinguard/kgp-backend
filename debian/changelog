@@ -1,3 +1,9 @@
+opi-backend (1.13.12) vili; urgency=medium
+
+  * Update deps
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 29 Aug 2017 10:11:51 +0200
+
 opi-backend (1.13.11) vili; urgency=medium
 
   * Writing Amazon user credentials from web UI 
