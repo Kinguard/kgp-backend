@@ -3,6 +3,7 @@ Section:admin
 Priority: optional
 Maintainer: Tor Krill <tor@openproducts.se>
 Build-Depends: debhelper (>= 8.0.0),
+	dh-systemd (>= 1.5),
 	cmake,
 	pkg-config,
 	libutils-dev,

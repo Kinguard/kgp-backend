@@ -1,0 +1,9 @@
+[Unit]
+Description=Backend daemon for Keep
+
+[Service]
+ExecStart=/usr/sbin/opi-backend -d
+Type=forking
+
+[Install]
+WantedBy=multi-user.target
