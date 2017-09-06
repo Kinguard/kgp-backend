@@ -3,6 +3,7 @@ Description=Backend daemon for Keep
 
 [Service]
 ExecStart=/usr/sbin/opi-backend -d
+PIDFile=/var/run/opi-backend.pid
 Type=forking
 
 [Install]
