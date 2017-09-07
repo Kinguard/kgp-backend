@@ -100,6 +100,7 @@ private:
 	void DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+    void DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 
 	// Helper functions

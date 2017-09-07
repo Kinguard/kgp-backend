@@ -17,6 +17,7 @@
 #include <libopi/SmtpConfig.h>
 #include <libopi/FetchmailConfig.h>
 #include <libopi/MailConfig.h>
+#include <libopi/SysInfo.h>
 
 #include <algorithm>
 #include <unistd.h>
@@ -175,6 +176,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["dosystemgetstatus"]=&OpiBackendServer::DoSystemGetStatus;
 	this->actions["dosystemgetstorage"]=&OpiBackendServer::DoSystemGetStorage;
 	this->actions["dosystemgetpackages"]=&OpiBackendServer::DoSystemGetPackages;
+    this->actions["dosystemgettype"]=&OpiBackendServer::DoSystemGetType;
 
 
 	// Setup mail paths etc
@@ -367,10 +369,11 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	// Add user to opi-domain
 	ConfigFile c(SYS_INFO);
 	string opiname = c.ValueOrDefault("opi_name");
+    string domain = c.ValueOrDefault("domain");
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.SetAddress(opiname+".op-i.me",user,user);
+    mc.SetAddress(opiname+"."+domain,user,user);
 	mc.WriteConfig();
 
 	update_postfix();
@@ -439,10 +442,11 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	// Remove user from opi-domain
 	ConfigFile c(SYS_INFO);
 	string opiname = c.ValueOrDefault("opi_name");
+    string domain = c.ValueOrDefault("domain");
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.DeleteAddress(opiname+".op-i.me",user);
+    mc.DeleteAddress(opiname+"."+domain,user);
 	mc.WriteConfig();
 
 	update_postfix();
@@ -1218,7 +1222,8 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 		}
 		else
 		{
-			res["date"] = "";
+            res["backup_status"] = "NotAvailable";
+            res["date"] = "";
 			res["info"] = "";
 		}
 	}
@@ -1982,7 +1987,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
 void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
 	Json::Value res(Json::objectValue);
 
-	ScopedLog l("Get OPI name");
+    ScopedLog l("Get OPI name!");
 
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
@@ -1994,6 +1999,9 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 		ConfigFile c(SYS_INFO);
 		res["opiname"] = c.ValueOrDefault("opi_name");
 		res["dnsenabled"] = c.ValueOrDefault("dnsenabled","1");
+        res["domain"] = c.ValueOrDefault("domain");
+        logg << Logger::Debug << "opiname: " << c.ValueOrDefault("opi_name").c_str() << " domain: " << c.ValueOrDefault("domain").c_str() <<lend;
+
 		this->SendOK(client, cmd, res);
 	}
 	else
@@ -2027,6 +2035,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	string oldopiname = c.ValueOrDefault("opi_name");
 	string hostname = cmd["hostname"].asString();
+    string domain = c.ValueOrDefault("domain");
 
 	if( hostname == oldopiname)
 	{
@@ -2065,7 +2074,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, hostname+".op-i.me", "OPI") )
+    if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, hostname+"."+domain, "OPI") )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
 		return;
@@ -2097,11 +2106,11 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	File::Write( CERT_PATH, ret["cert"].asString(), 0644);
 
 	/* Update postfix with new "hostname" */
-	File::Write("/etc/mailname", hostname+".op-i.me", 0644);
+    File::Write("/etc/mailname", hostname+"."+domain, 0644);
 
 	MailConfig mc;
 	mc.ReadConfig();
-	mc.ChangeDomain(oldopiname+".op-i.me",hostname+".op-i.me");
+    mc.ChangeDomain(oldopiname+"."+domain,hostname+"."+domain);
 	mc.WriteConfig();
 
 	this->SendOK(client, cmd);
@@ -2630,7 +2639,7 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 	{
 		String::Split(ExecOutput,storage," ");
 
-		ret["storage"]["total"]=storage[0];
+        ret["storage"]["total"]=storage[0];
 		ret["storage"]["used"]=storage[1];
 		ret["storage"]["available"]=storage[2];
 		
@@ -2643,11 +2652,29 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 		
 }
 
+void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+    ScopedLog l("Do System Get Type");
+    Json::Value ret;
+
+    int type;
+    string typeText;
+
+    type=OPI::sysinfo.Type();
+    typeText=OPI::sysinfo.SysTypeText[type];
+
+    ret["type"]=type;
+    ret["typeText"]=typeText;
+
+    this->SendOK(client, cmd, ret);
+
+}
+
 void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Get Packages");
 	list<string> packages,dpkglist;
-	string packagescript, packagelist, ExecOutput;
+    string packagescript, packagelist, ExecOutput, FailedPkgs;
 	bool valid_list=false;
 	Json::Value ret;
 	int retval;
@@ -2676,9 +2703,15 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 		}
 		if( valid_list )
 		{
-			packagescript = "dpkg -l "+packagelist +" | grep ^ii | awk '{print $2 \" \" $3}'";
+            packagescript = "dpkg -l "+packagelist +" | grep ^ii | awk '{print $2 \" \" $3 \" \" $1}'";
 			tie(retval,ExecOutput)=Process::Exec( packagescript );
 		}
+
+        // Also get packages not correctly installed
+        packagescript = "dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2 \" \" $3 \" \" $1}'";
+        tie(retval,FailedPkgs)=Process::Exec( packagescript );
+
+        ExecOutput=ExecOutput+FailedPkgs;
 		if (retval)
 		{
 			String::Split(ExecOutput,dpkglist,"\n");
@@ -2686,8 +2719,8 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 			{
 				vector<string> curr_pkg;
 				String::Split(pkg,curr_pkg," ");
-				if ( curr_pkg.size() == 2 ) {
-					ret["packages"][curr_pkg[0]] = curr_pkg[1];
+                if ( curr_pkg.size() == 3 ) {
+                    ret["packages"][curr_pkg[0]] = curr_pkg[1] +"("+curr_pkg[2]+")";
 				}
 				else
 				{

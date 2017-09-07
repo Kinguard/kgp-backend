@@ -1,3 +1,10 @@
+opi-backend (1.13.14) vili; urgency=medium
+
+  * Removing hard-coded deps to "op-i.me"
+  * Added support for a systype call. 
+
+ -- PA Nilsson <pa@openproducts.se>  Thu, 07 Sep 2017 15:22:38 +0200
+
 opi-backend (1.13.13) vili; urgency=medium
 
   * Add systemd service
