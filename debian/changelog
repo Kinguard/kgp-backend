@@ -1,3 +1,9 @@
+opi-backend (1.13.15) vili; urgency=medium
+
+  * Update dropbear to debian version
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 21 Dec 2017 21:15:04 +0100
+
 opi-backend (1.13.14) vili; urgency=medium
 
   * Removing hard-coded deps to "op-i.me"

@@ -7,7 +7,7 @@ then
         exit 1
 fi
 
-dpkg -r dropbear || exit 1
+dpkg -P dropbear-bin dropbear-run || exit 1
 
 /usr/bin/passwd -d root || exit 1
 
