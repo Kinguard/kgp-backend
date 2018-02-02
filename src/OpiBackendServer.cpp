@@ -18,6 +18,7 @@
 #include <libopi/FetchmailConfig.h>
 #include <libopi/MailConfig.h>
 #include <libopi/SysInfo.h>
+#include <libopi/ExtCert.h>
 
 #include <algorithm>
 #include <unistd.h>
@@ -130,7 +131,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["shutdown"]=&OpiBackendServer::DoShutdown;
 
 	this->actions["updategetstate"]=&OpiBackendServer::DoUpdateGetstate;
-	this->actions["updatesetstate"]=&OpiBackendServer::DoUpdateSetstate;
+    this->actions["updatesetstate"]=&OpiBackendServer::DoUpdateSetstate;
 
 	this->actions["backupgetsettings"]=&OpiBackendServer::DoBackupGetSettings;
 	this->actions["backupsetsettings"]=&OpiBackendServer::DoBackupSetSettings;
@@ -2013,6 +2014,7 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Set OPI name");
+    Json::Value response(Json::objectValue);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
@@ -2035,9 +2037,11 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	string oldopiname = c.ValueOrDefault("opi_name");
 	string hostname = cmd["hostname"].asString();
-    string domain = c.ValueOrDefault("domain");
+    string domain = cmd["domain"].asString();
+    string olddomain = c.ValueOrDefault("domain");
+    string fqdn = hostname+"."+domain;
 
-	if( hostname == oldopiname)
+    if( (hostname == oldopiname) && (olddomain == domain))
 	{
 		// no need to do any updates on server side
 		// make sure dns is enabled and return vith OK
@@ -2054,19 +2058,23 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	/* Try update DNS, i.e. reserve name */
 	OPI::DnsServer dns;
+    logg << Logger::Debug << "Try to set new device name on server"<<lend;
 
-	if( !dns.UpdateDynDNS(unit_id, hostname) )
+    if( !dns.UpdateDynDNS(unit_id, fqdn) )
 	{
 		this->SendErrorMessage( client, cmd, 400, "Failed to set opi name");
 		return;
 	}
 
-	// Update sysconfig with new name
+    logg << Logger::Debug << "Update sysconfig with new name"<<lend;
+    // Update sysconfig with new name
 	c["opi_name"] = hostname;
-	c["dnsenabled"] = "1";
+    c["domain"] = domain;
+    c["dnsenabled"] = "1";
 	c.Sync();
 
 	/* Get a signed certificate for the new name */
+    logg << Logger::Debug << "Get OP cert"<<lend;
 	string token = this->BackendLogin( unit_id );
 	if( token == "" )
 	{
@@ -2074,7 +2082,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-    if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, hostname+"."+domain, "OPI") )
+    if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, fqdn, "OPI") )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
 		return;
@@ -2106,19 +2114,56 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	File::Write( CERT_PATH, ret["cert"].asString(), 0644);
 
 	/* Update postfix with new "hostname" */
-    File::Write("/etc/mailname", hostname+"."+domain, 0644);
+    logg << Logger::Debug << "Update mail config"<<lend;
+    File::Write("/etc/mailname", fqdn, 0644);
 
 	MailConfig mc;
-	mc.ReadConfig();
-    mc.ChangeDomain(oldopiname+"."+domain,hostname+"."+domain);
-	mc.WriteConfig();
+    try
+    {
+        mc.ReadConfig();
+        mc.ChangeDomain(oldopiname+"."+domain,fqdn);
+        mc.WriteConfig();
+    }
+    catch (std::runtime_error& err)
+    {
+        string errmsg="Failed to update domain in MailConfig";
+        response["errmsg"]=errmsg;
+        logg << Logger::Error << "Caught exception: " << err.what() <<lend;
+        Notify::NewMessage Msg(LOG_ERR,errmsg);
+        Msg.Send();
+    }
 
-	this->SendOK(client, cmd);
+    //this->SendOK(client, cmd);
 
-	/* Restart related services */
-	update_postfix();
 
-	ServiceHelper::Reload("nginx");
+
+    /* Try to get a signed external certificate */
+    /* The script(s) responsible for external certs shall read hostname and domain from sysinfo */
+    logg << Logger::Debug << "Start generation of external certificates"<<lend;
+    int retval;
+    string msg;
+
+    OPI::ExtCert ec;
+    tie(retval,msg) = ec.GetExternalCertificates(false);
+    logg << Logger::Debug << "Ext Cert returned: " << retval << lend;
+    if ( ! retval )
+    {
+        string errmsg=" Failed to generate new externally signed certificate when setting name '"+fqdn+"'.";
+        response["errmsg"] = response["errmsg"].asString() + errmsg;
+        logg << Logger::Warning << errmsg << lend;
+        Notify::NewMessage Msg(LOG_WARNING,errmsg);
+        Msg.Send();
+
+    }
+
+    this->SendOK(client, cmd, response);
+
+
+    /* Restart related services */
+    update_postfix();
+    ServiceHelper::Reload("nginx");
+
+
 }
 
 void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -2178,6 +2223,7 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	if ( cfg["CertType"] == "LETSENCRYPT" )
 	{
 		// test to see if signed cert is used, if it could not be generated there is a fallback to default self singed certificate
+        logg << Logger::Debug << "Testing for used certificate."<<lend;
 	    char buff[PATH_MAX];
 	    string certpath;
 	    ssize_t len = ::readlink(WEB_CERT, buff, sizeof(buff)-1);
@@ -2185,7 +2231,9 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	    {
 	    	buff[len] = '\0';
 	    	certpath=std::string(buff);
-	    	if ( certpath == DEFAULT_CERT )
+            logg << Logger::Debug << "CertPath used:" << certpath <<lend;
+
+            if ( File::GetFileName(certpath) == DEFAULT_CERT )
 	    	{
 	    		cfg["CertStatus"] = "ERROR";
 	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
