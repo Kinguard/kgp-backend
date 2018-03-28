@@ -5,6 +5,7 @@ Description=Backend daemon for Keep
 ExecStart=/usr/sbin/opi-backend -d
 PIDFile=/var/run/opi-backend.pid
 Type=forking
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
