@@ -3,7 +3,7 @@ Upstream-Name: opi-backend
 
 Files: *
 Copyright: 2014 Tor Krill <tor@openproducts.se> 
-License: GPL-3.0+
+License: AGPLv3
 
 Files: debian/*
 Copyright: 2014 Tor Krill <tor@openproducts.se>
