@@ -1,3 +1,9 @@
+opi-backend (1.13.18) vili; urgency=medium
+
+  * Fixed notificaton of certificate status. 
+
+ -- PA Nilsson <pa@openproducts.se>  Fri, 20 Apr 2018 11:10:23 +0200
+
 opi-backend (1.13.17) vili; urgency=medium
 
   * Update license
