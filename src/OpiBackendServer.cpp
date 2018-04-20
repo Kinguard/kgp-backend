@@ -2233,7 +2233,7 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	    	certpath=std::string(buff);
             logg << Logger::Debug << "CertPath used:" << certpath <<lend;
 
-            if ( File::GetFileName(certpath) == DEFAULT_CERT )
+            if ( File::GetFileName(File::RealPath(certpath)) == DEFAULT_CERT )
 	    	{
 	    		cfg["CertStatus"] = "ERROR";
 	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
