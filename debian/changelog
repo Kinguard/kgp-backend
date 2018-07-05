@@ -1,3 +1,9 @@
+opi-backend (1.13.19) vili; urgency=medium
+
+  * Updated to use sysconfig parameters. 
+
+ -- PA Nilsson <pa@openproducts.se>  Thu, 05 Jul 2018 10:45:38 +0200
+
 opi-backend (1.13.18) vili; urgency=medium
 
   * Fixed notificaton of certificate status. 
