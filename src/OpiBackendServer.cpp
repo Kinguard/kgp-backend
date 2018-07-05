@@ -19,7 +19,7 @@
 #include <libopi/MailConfig.h>
 #include <libopi/SysInfo.h>
 #include <libopi/ExtCert.h>
-
+#include <libopi/SysConfig.h>
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
@@ -354,6 +354,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string display =	cmd["displayname"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
+    SysConfig sysconfig;
 
 	if( ! secop->CreateUser( user, pass,display ) )
 	{
@@ -368,9 +369,20 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	mmf.WriteConfig();
 
 	// Add user to opi-domain
-	ConfigFile c(SYS_INFO);
-	string opiname = c.ValueOrDefault("opi_name");
-    string domain = c.ValueOrDefault("domain");
+    string opiname;
+    string domain;
+    try
+    {
+        opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
+        domain = sysconfig.GetKeyAsString("hostinfo","domain");
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+        return;
+    }
+
 
 	MailConfig mc;
 	mc.ReadConfig();
@@ -385,6 +397,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do Delete user");
+    SysConfig sysconfig;
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
@@ -441,9 +454,18 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	mmf.WriteConfig();
 
 	// Remove user from opi-domain
-	ConfigFile c(SYS_INFO);
-	string opiname = c.ValueOrDefault("opi_name");
-    string domain = c.ValueOrDefault("domain");
+    string opiname;
+    string domain;
+    try {
+        opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
+        domain = sysconfig.GetKeyAsString("hostinfo","hostname");
+    }
+    catch (std::runtime_error& e)
+    {
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        this->SendErrorMessage(client, cmd, 400, "Failed");
+        return;
+    }
 
 	MailConfig mc;
 	mc.ReadConfig();
@@ -980,22 +1002,25 @@ void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json:
 	Json::Value res(Json::objectValue);
 
 	ScopedLog l("Get update state");
+    SysConfig sysconfig;
 
 	if( ! this->CheckLoggedIn(client,cmd)  || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
 
-	if( File::FileExists(UPDATE_CONFIG))
-	{
-		ConfigFile c(UPDATE_CONFIG);
-		res["update"] = c.ValueOrDefault("update");
-		this->SendOK(client, cmd, res);
-	}
-	else
-	{
-		this->SendErrorMessage(client, cmd, 400, "No config file present");
-	}
+    try
+    {
+        res["update"] = sysconfig.GetKeyAsBool("autoupdate","enabled");
+        this->SendOK(client, cmd, res);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
+
 }
 
 void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1004,30 +1029,30 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 
 	ScopedLog l("Set update state");
 	string doupdates = cmd["state"].asString();
+    SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
 
-	string path = File::GetPath( UPDATE_CONFIG );
 
-	if( ! File::DirExists( path ) )
-	{
-		File::MkPath( path, 0755 );
-	}
+    try
+    {
+        bool enabled = false;
+        if(doupdates == "1")
+        {
+            enabled = true;
+        }
+        sysconfig.PutKey("autoupdate","enabled",enabled);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
 
-	ConfigFile c( UPDATE_CONFIG );
-	if(doupdates == "1")
-	{
-		c["update"] = "yes";
-	}
-	else
-	{
-		c["update"] = "no";
-	}
-
-	c.Sync(true, 0644);
 	this->SendOK(client, cmd);
 
 }
@@ -1036,7 +1061,9 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 {
 	Json::Value res(Json::objectValue);
 	string backend,key;
-	string type;
+    bool enabled;
+    string type, bucket;
+    SysConfig sysconfig;
 
 	ScopedLog l("Get backup settings");
 
@@ -1045,48 +1072,55 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	if( File::FileExists(BACKUP_CONFIG))
-	{
-		ConfigFile c(BACKUP_CONFIG);
-		backend = c.ValueOrDefault("backend");
-		logg << Logger::Error << "Backend: " << backend <<lend;
-
-		if(backend == "s3op://")
-		{
-			res["enabled"] = true;
-			res["location"] = "op";
-		}
-		else if (backend == "local://")
-		{
-			res["enabled"] = true;
-			res["location"] = "local";
-		}
-		else if (backend == "s3://")
-		{
-			res["enabled"] = true;
-			res["location"] = "amazon";
-		}
-		else
-		{
-			res["enabled"] = false;
-			res["location"] = "remote";  // Show as default target in UI
-		}
-		res["type"] = c.ValueOrDefault("type");
-
-		// always return any AWS config found.
-		res["AWSbucket"] = c.ValueOrDefault("bucket");
+    try
+    {
+        backend = sysconfig.GetKeyAsString("backup","backend");
+        enabled = sysconfig.GetKeyAsBool("backup","enabled");
+        if ( sysconfig.HasKey("backup","type") )
+        {
+            type = sysconfig.GetKeyAsString("backup","type");
+        }
+        if ( sysconfig.HasKey("backup","bucket") )
+        {
+            bucket = sysconfig.GetKeyAsString("backup","bucket");
+        }
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
 
 
-		IniFile aws(BACKUP_AUTH,":");
-		aws.UseSection("s3");
-		res["AWSkey"] = aws.ValueOrDefault("backend-login");
+    logg << Logger::Error << "Backend: " << backend <<lend;
+    res["enabled"] = enabled;
 
-		this->SendOK(client, cmd, res);
-	}
-	else
-	{
-		this->SendErrorMessage(client, cmd, 400, "No config file present");
-	}
+    if(backend == "s3op://")
+    {
+        res["location"] = "op";
+    }
+    else if (backend == "local://")
+    {
+        res["location"] = "local";
+    }
+    else if (backend == "s3://")
+    {
+        res["location"] = "amazon";
+    }
+    else
+    {
+        res["location"] = "remote";  // Show as default target in UI
+    }
+    res["type"] = type;
+    res["AWSbucket"] = bucket;
+
+
+    IniFile aws(BACKUP_AUTH,":");
+    aws.UseSection("s3");
+    res["AWSkey"] = aws.ValueOrDefault("backend-login");
+
+    this->SendOK(client, cmd, res);
 }
 
 void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1099,60 +1133,64 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	string AWSkey = cmd["AWSkey"].asString();
 	string AWSseckey = cmd["AWSseckey"].asString();
 	string AWSbucket = cmd["AWSbucket"].asString();
+    SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
 
-	string path = File::GetPath( BACKUP_CONFIG );
+    try
+    {
+        bool enabled=true;
+        logg << Logger::Debug << "Set backend to " << backend << lend;
+        if(backend == "local")
+        {
+            sysconfig.PutKey("backup","backend", string("local://"));
+        }
+        else if (backend == "op")
+        {
+            sysconfig.PutKey("backup","backend", string("s3op://"));
+        }
+        else if (backend == "amazon")
+        {
+            sysconfig.PutKey("backup","backend", string("s3://"));
+            if(sysconfig.GetKeyAsString("backup","bucket") != AWSbucket)
+            {
+                // bucket has changed, umount the backend to trigger new mount on next backup
+                Process::Exec( BACKUP_UMOUNT_FS);
+            }
+            sysconfig.PutKey("backup","bucket", AWSbucket);
 
-	if( ! File::DirExists( path ) )
-	{
-		File::MkPath( path, 0755 );
-	}
+            IniFile aws(BACKUP_AUTH,":");
+            aws.UseSection("s3");
 
-	ConfigFile c( BACKUP_CONFIG );
-	if(backend == "local")
-	{
-		c["backend"] = "local://";
-	}
-	else if (backend == "op")
-	{
-		c["backend"] = "s3op://";
-	}
-	else if (backend == "amazon")
-	{
-		c["backend"] = "s3://";
-		if(c.ValueOrDefault("bucket") != AWSbucket)
-		{
-			// bucket has changed, umount the backend to trigger new mount on next backup
-			Process::Exec( BACKUP_UMOUNT_FS);
-		}
-		c["bucket"] =  AWSbucket;
+            if ( AWSseckey.length()  > 0 )
+            {
+                // only write password if we get a new, it might already exist.
+                aws["s3"]["backend-password"] = AWSseckey;
+            }
+            aws["s3"]["backend-login"] = AWSkey;
+            aws.Save();
 
-		IniFile aws(BACKUP_AUTH,":");
-		aws.UseSection("s3");
 
-		if ( AWSseckey.length()  > 0 ) 
-		{
-			// only write password if we get a new, it might already exist.
-			aws["s3"]["backend-password"] = AWSseckey;	
-		}
-		aws["s3"]["backend-login"] = AWSkey;
-		aws.Save();
-		
+        }
+        else
+        {
+            enabled = false;
+        }
 
-	}
-	else
-	{
-		c["backend"] = "none";
-	}
+        sysconfig.PutKey("backup","type", type);
+        sysconfig.PutKey("backup","enabled", enabled);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+        logg << Logger::Error << "Failed to write sysconfig" << e.what() << lend;
+        return;
+    }
 
-	c["type"] = type;
-
-	c.Sync(true, 0644);
-	this->SendOK(client, cmd);
+    this->SendOK(client, cmd);
 	if(backend == "remote" || backend == "local" || backend == "amazon")
 	{
 		Process::Exec( BACKUP_MOUNT_FS);
@@ -1932,82 +1970,134 @@ void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client,
 	Json::Value res(Json::objectValue);
 
 	ScopedLog l("Get port state");
+    SysConfig sysconfig;
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
 		return;
 	}
-	string port = "ports["+cmd["port"].asString()+"]";
+    string port = cmd["port"].asString();
+    string forwardports;
 
-	if( File::FileExists(ACCESS_CONFIG))
-	{
-		ConfigFile c(ACCESS_CONFIG);
-		res["is_open"] = c.ValueOrDefault(port,"no");
-		this->SendOK(client, cmd, res);
-	}
-	else
-	{
-		res["is_open"] = "no";
-		this->SendOK(client, cmd, res);
-	}
+    try
+    {
+        forwardports = sysconfig.GetKeyAsString("upnp","forwardports");
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
+    list<string> ports = Utils::String::Split(forwardports," ");
+    if ( std::find(ports.begin(), ports.end(), port) != ports.end() )
+    {
+        res["is_open"] = "yes";
+    }
+    else
+    {
+        res["is_open"] = "no";
+    }
+
+    this->SendOK(client, cmd, res);
 }
 
 void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
 	Json::Value res(Json::objectValue);
 
 	ScopedLog l("Set port state");
+    SysConfig sysconfig(true);
+
+
+    string port = cmd["port"].asString();
+    string forwardports;
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
 		return;
 	}
+    try
+    {
+        forwardports = sysconfig.GetKeyAsString("upnp","forwardports");
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+    }
+    list<string> ports = Utils::String::Split(forwardports," ");
+    list<string>::iterator i;
 
-	string port = "ports["+cmd["port"].asString()+"]";
-	string state;
-	if(cmd["set_open"].asBool())
-	{
-		state = "yes";
-	}
-	else
-	{
-		state = "no";
-	}
+    i = find(ports.begin(), ports.end(), port);
+    if (i != ports.end()) {
+        // found port in config
+        if (! cmd["set_open"].asBool())
+        {
+            // remove port
+            logg << Logger::Debug << "Remove port" << port << lend;
+            ports.erase(i);
+        }
+    }
+    else
+    {
+        // port is not in config
+        if (cmd["set_open"].asBool())
+        {
+            // add port
+            logg << Logger::Debug << "Add port" << port << lend;
+            ports.push_back(port);
+        }
+    }
 
-	string access_path = File::GetPath( ACCESS_CONFIG );
-	if( ! File::DirExists( access_path ) )
-	{
-		File::MkPath( access_path, 0755);
-	}
+    forwardports = "";
+    for (std::list<string>::iterator it=ports.begin(); it!=ports.end(); ++it)
+    {
+        if (it != ports.begin())
+        {
+            forwardports += " "; // add a space between ports
+        }
 
-	ConfigFile c(ACCESS_CONFIG);
-	c[port] = state;
-	c.Sync(true, 0644);
-	this->SendOK(client, cmd);
+        forwardports += *it;
+    }
+    try
+    {
+        sysconfig.PutKey("upnp","forwardports",forwardports);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
+
+    this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
 	Json::Value res(Json::objectValue);
 
     ScopedLog l("Get OPI name!");
+    SysConfig sysconfig;
 
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
 
-	if( File::FileExists(SYS_INFO))
+    try
 	{
-		ConfigFile c(SYS_INFO);
-		res["opiname"] = c.ValueOrDefault("opi_name");
-		res["dnsenabled"] = c.ValueOrDefault("dnsenabled","1");
-        res["domain"] = c.ValueOrDefault("domain");
-        logg << Logger::Debug << "opiname: " << c.ValueOrDefault("opi_name").c_str() << " domain: " << c.ValueOrDefault("domain").c_str() <<lend;
+        res["opiname"] = sysconfig.GetKeyAsString("hostinfo","hostname");
+        res["dnsenabled"] = sysconfig.GetKeyAsBool("dns","enabled");
+        res["domain"] = sysconfig.GetKeyAsString("hostinfo","domain");
+        logg << Logger::Debug << "opiname: " << sysconfig.GetKeyAsString("hostinfo","hostname").c_str() << " domain: " << sysconfig.GetKeyAsString("hostinfo","domain").c_str() <<lend;
 
 		this->SendOK(client, cmd, res);
 	}
-	else
+    catch (std::runtime_error& e)
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
 	}
 }
 
@@ -2015,6 +2105,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 {
 	ScopedLog l("Set OPI name");
     Json::Value response(Json::objectValue);
+    SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
@@ -2026,27 +2117,42 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	if( ! File::FileExists( SYS_INFO ) )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
-		return;
-	}
+    string unit_id;
+    string oldopiname;
+    string hostname;
+    string domain;
+    string olddomain;
+    string fqdn;
 
-	ConfigFile c(SYS_INFO);
-	string unit_id = c.ValueOrDefault("unit_id");
-
-	string oldopiname = c.ValueOrDefault("opi_name");
-	string hostname = cmd["hostname"].asString();
-    string domain = cmd["domain"].asString();
-    string olddomain = c.ValueOrDefault("domain");
-    string fqdn = hostname+"."+domain;
+    try
+    {
+        unit_id = sysconfig.GetKeyAsString("hostinfo","unitid");
+        oldopiname = sysconfig.GetKeyAsString("hostinfo","hostname");
+        hostname = cmd["hostname"].asString();
+        domain = cmd["domain"].asString();
+        olddomain = sysconfig.GetKeyAsString("hostinfo","domain");
+        fqdn = hostname+"."+domain;
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+    }
 
     if( (hostname == oldopiname) && (olddomain == domain))
 	{
 		// no need to do any updates on server side
 		// make sure dns is enabled and return vith OK
-		c["dnsenabled"] = "1";
-		c.Sync();
+        try
+        {
+            sysconfig.PutKey("dns","enabled",true);
+        }
+        catch (std::runtime_error& e)
+        {
+            this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+            logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+            return;
+        }
+
 		this->SendOK(client, cmd);
 		return;
 	}
@@ -2068,10 +2174,19 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
     logg << Logger::Debug << "Update sysconfig with new name"<<lend;
     // Update sysconfig with new name
-	c["opi_name"] = hostname;
-    c["domain"] = domain;
-    c["dnsenabled"] = "1";
-	c.Sync();
+    try
+    {
+        sysconfig.PutKey("hostinfo","hostname",hostname);
+        sysconfig.PutKey("hostinfo","domain",domain);
+        sysconfig.PutKey("dns","enabled",true);
+
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+        return;
+    }
 
 	/* Get a signed certificate for the new name */
     logg << Logger::Debug << "Get OP cert"<<lend;
@@ -2169,21 +2284,23 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Disalbe OPI DNS");
-
+    SysConfig sysconfig(true);
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
 		return;
 	}
 
-	if( ! File::FileExists( SYS_INFO ) )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to read sysinfo file");
-		return;
-	}
+    try
+    {
+        sysconfig.PutKey("dns","enabled",false);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+        return;
+    }
 
-	ConfigFile c(SYS_INFO);
-	c["dnsenabled"] = "0";
-	c.Sync();
 	this->SendOK(client, cmd);
 }
 
@@ -2192,6 +2309,7 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	ScopedLog l("Get Webserver Certificates");
 	Json::Value cfg;
 	string CustomCertFile,CustomKeyFile;
+    SysConfig sysconfig;
 
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
@@ -2199,16 +2317,11 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 		return;
 	}
 
-	if( ! File::FileExists( CERT_INFO ) )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to read certificate info file");
-		return;
-	}
-
-	ConfigFile c(CERT_INFO);
-
-	cfg["CertType"] = c.ValueOrDefault("BACKEND");
-	CustomCertFile = c.ValueOrDefault("CERT");
+    cfg["CertType"] = sysconfig.GetKeyAsString("webcertificate","backend");
+    if (sysconfig.HasKey("webcertificate","customcert"))
+    {
+        CustomCertFile = sysconfig.GetKeyAsString("webcertificate","customcert");
+    }
 
 	if ( File::FileExists( CustomCertFile ) )
 	{
@@ -2254,13 +2367,23 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 	string certtype = cmd["CertType"].asString();
 	string certificate = cmd["CustomCertVal"].asString();
 	string key = cmd["CustomKeyVal"].asString();
+    SysConfig sysconfig(true);
 	int linkval;
 
 	if (certtype == "LETSENCRYPT") 
 	{
-		ConfigFile c(CERT_INFO);
-		c["BACKEND"]=certtype;
-		c.Sync();
+        // actual certificate generation and updates handled by kinguard-certhandler triggered by cron
+        try
+        {
+            sysconfig.PutKey("webcertificate","backend",certtype);
+        }
+        catch (std::runtime_error& e)
+        {
+            this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+            logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+            return;
+        }
+
 		this->SendOK( client, cmd);
 	}
 	else if (certtype == "CUSTOMCERT")
@@ -2268,12 +2391,6 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 		if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 		{
 			this->SendErrorMessage( client, cmd, 404, "Unauthorized");
-			return;
-		}
-
-		if( ! File::FileExists( CERT_INFO ) )
-		{
-			this->SendErrorMessage( client, cmd, 500, "Failed to read certificate info file");
 			return;
 		}
 
@@ -2300,13 +2417,18 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 
 		// INPUT VALIDATED, WRITE FILES
 		logg << Logger::Debug << "Certificates seem to be Valid" << lend;
-		ConfigFile c(CERT_INFO);
 
-		CustomKeyFile = c.ValueOrDefault("KEY");
-		CustomCertFile = c.ValueOrDefault("CERT");
+        string CustomCertPath = "/etc/kinguard/usercert/";
+        if (sysconfig.HasKey("webcertificate","customkey") && sysconfig.HasKey("webcertificate","customcert") )
+        {
+            CustomKeyFile = sysconfig.GetKeyAsString("webcertificate","customkey");
+            CustomCertFile = sysconfig.GetKeyAsString("webcertificate","customcert");
+            CustomCertPath = File::GetPath(CustomCertFile);
+        }
 
-	 	string keyFilename = this->getTmpFile(DEFAULT_USERCERT_PATH,".key");
-	 	string certFilename = this->getTmpFile(DEFAULT_USERCERT_PATH,".cert");
+
+        string keyFilename = this->getTmpFile(CustomCertPath,".key");
+        string certFilename = this->getTmpFile(CustomCertPath,".cert");
 
 		if ( key.length() )
 		{
@@ -2346,16 +2468,25 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 		tie(retval,Message)=Process::Exec( "nginx -t" );
 		if ( retval )
 		{
+            try
+            {
+                sysconfig.PutKey("webcertificate","customkey",keyFilename);
+                sysconfig.PutKey("webcertificate","customcert",certFilename);
+                sysconfig.PutKey("webcertificate","backend",certtype);
+            }
+            catch (std::runtime_error& e)
+            {
+                this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+                logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+                return;
+            }
+
 			// update config file
-			c["KEY"] = keyFilename;
-			c["CERT"] = certFilename;
-			c["BACKEND"]=certtype;
-			c.Sync();
 
 			// nginx config is correct, restart webserver
-			logg << Logger::Debug << "Restarting Nginx" << lend;
-			ServiceHelper::Stop("nginx");
-			ServiceHelper::Start("nginx");
+            logg << Logger::Debug << "Reloading Nginx config" << lend;
+            ServiceHelper::Reload("nginx");
+            //ServiceHelper::Start("nginx");
 		}
 		else
 		{
@@ -2756,7 +2887,7 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 		}
 
         // Also get packages not correctly installed
-        packagescript = "dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2 \" \" $3 \" \" $1}'";
+        packagescript = "dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2, $3, $1}'";
         tie(retval,FailedPkgs)=Process::Exec( packagescript );
 
         ExecOutput=ExecOutput+FailedPkgs;
@@ -3017,14 +3148,17 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 
 	if ( type == "key" && ! cert.length())
 	{
-		// no key was passed in the post, try to use existing one on file
-		if( ! File::FileExists( CERT_INFO ) )
-		{
-			return false;
-		}
-
-		ConfigFile c(CERT_INFO);
-		CustomKeyFile = c.ValueOrDefault("KEY");
+        // no key was passed in the post, try to use existing one on file
+        try
+        {
+            SysConfig sysconfig;
+            CustomKeyFile = sysconfig.GetKeyAsString("webcertificate","customkey");
+        }
+        catch (std::runtime_error& e)
+        {
+            logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+            return false;
+        }
 
 		if( ! File::FileExists( CustomKeyFile ) )
 		{

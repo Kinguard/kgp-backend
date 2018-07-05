@@ -33,9 +33,6 @@
 
 #define SOCKPATH	"/tmp/opib"
 
-#define UPDATE_CONFIG "/etc/opi/opi-update.conf"
-
-#define BACKUP_CONFIG "/var/opi/etc/backup/target.conf"
 #define BACKUP_AUTH "/var/opi/etc/backup/auth.conf"
 #define BACKUP_LOG "/var/log/opi-backup/backup.log"
 #define BACKUP_ALERT "/var/log/opi-backup/alert"
@@ -47,14 +44,10 @@
 #define BACKUP_UMOUNT_FS "/usr/share/opi-backup/umount_fs.sh"
 #define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 
-#define ACCESS_CONFIG "/etc/opi/opi-access.conf"
-#define CERT_INFO "/etc/kinguard/kinguard-certhandler.conf"
-#define DEFAULT_USERCERT_PATH "/etc/kinguard/usercerts/"
 #define WEB_CERT "/etc/opi/web_cert.pem"
 #define WEB_KEY "/etc/opi/web_key.pem"
 #define DEFAULT_CERT "opi.cert"
 
-#define SYS_INFO "/etc/opi/sysinfo.conf"
 #define PACKAGE_INFO "/etc/opi/packageinfo.conf"
 
 #define NOTIFY_DIR "/var/spool/kgp-notify/"
