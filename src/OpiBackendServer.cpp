@@ -2335,11 +2335,12 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 
 	if ( cfg["CertType"] == "LETSENCRYPT" )
 	{
+        string webcert = sysconfig.GetKeyAsString("webcertificate","activecert");
 		// test to see if signed cert is used, if it could not be generated there is a fallback to default self singed certificate
         logg << Logger::Debug << "Testing for used certificate."<<lend;
 	    char buff[PATH_MAX];
 	    string certpath;
-	    ssize_t len = ::readlink(WEB_CERT, buff, sizeof(buff)-1);
+        ssize_t len = ::readlink(webcert.c_str(), buff, sizeof(buff)-1);
 	    if (len != -1)
 	    {
 	    	buff[len] = '\0';
@@ -2419,6 +2420,8 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 		logg << Logger::Debug << "Certificates seem to be Valid" << lend;
 
         string CustomCertPath = "/etc/kinguard/usercert/";
+        string webcert = sysconfig.GetKeyAsString("webcertificate","activecert");
+        string webkey = sysconfig.GetKeyAsString("webcertificate","activekey");
         if (sysconfig.HasKey("webcertificate","customkey") && sysconfig.HasKey("webcertificate","customcert") )
         {
             CustomKeyFile = sysconfig.GetKeyAsString("webcertificate","customkey");
@@ -2452,14 +2455,14 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 
 		// create a backup copy of the cert symlinks nginx uses
 		string curr_key,curr_cert;
-		curr_key = File::RealPath(WEB_KEY);
-		curr_cert = File::RealPath(WEB_CERT);
+        curr_key = File::RealPath(webkey);
+        curr_cert = File::RealPath(webcert);
 
-		File::Delete(WEB_CERT);
-		File::Delete(WEB_KEY);
+        File::Delete(webcert);
+        File::Delete(webkey);
 
-		linkval=symlink(certFilename.c_str(),WEB_CERT);
-		linkval=symlink(keyFilename.c_str(),WEB_KEY);
+        linkval=symlink(certFilename.c_str(),webcert.c_str());
+        linkval=symlink(keyFilename.c_str(),webkey.c_str());
 
 		// new links should now be in place, let nginx test the config
 		int retval;
@@ -2492,11 +2495,11 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 		{
 			// nginx config test failed, restore old links
 			logg << Logger::Debug << "Nginx config test failed" << lend;
-			File::Delete(WEB_CERT);
-			File::Delete(WEB_KEY);
+            File::Delete(webcert);
+            File::Delete(webkey);
 
-			linkval=symlink(curr_cert.c_str(),WEB_CERT);
-			linkval=symlink(curr_key.c_str(),WEB_KEY);
+            linkval=symlink(curr_cert.c_str(),webcert.c_str());
+            linkval=symlink(curr_key.c_str(),webkey.c_str());
 
 			this->SendErrorMessage( client, cmd, 500, "Webserver config test failed with new certificates");
 			return;

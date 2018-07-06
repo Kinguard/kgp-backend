@@ -44,8 +44,6 @@
 #define BACKUP_UMOUNT_FS "/usr/share/opi-backup/umount_fs.sh"
 #define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 
-#define WEB_CERT "/etc/opi/web_cert.pem"
-#define WEB_KEY "/etc/opi/web_key.pem"
 #define DEFAULT_CERT "opi.cert"
 
 #define PACKAGE_INFO "/etc/opi/packageinfo.conf"
