@@ -363,7 +363,8 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	}
 
 	// Add user to local mail
-	MailMapFile mmf( LOCAL_MAILFILE );
+    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    MailMapFile mmf( localmail );
 	mmf.ReadConfig();
 	mmf.SetAddress("localdomain", user, user);
 	mmf.WriteConfig();
@@ -448,7 +449,8 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	}
 
 	// Remove user from local mail
-	MailMapFile mmf( LOCAL_MAILFILE );
+    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    MailMapFile mmf( localmail );
 	mmf.ReadConfig();
 	mmf.DeleteAddress("localdomain", user);
 	mmf.WriteConfig();
@@ -799,7 +801,9 @@ static bool addusertomailadmin( const string& user )
 {
 	try
 	{
-		MailAliasFile mf( VIRTUAL_ALIASES );
+        string valias = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","virtualalias");
+
+        MailAliasFile mf( valias );
 
 		mf.AddUser("/^postmaster@/",user+"@localdomain");
 		mf.AddUser("/^root@/",user+"@localdomain");
@@ -912,7 +916,9 @@ static bool removeuserfrommailadmin( const string& user )
 {
 	try
 	{
-		MailAliasFile mf( VIRTUAL_ALIASES );
+        string valias = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","virtualalias");
+
+        MailAliasFile mf( valias );
 
 		mf.RemoveUser("/^postmaster@/",user+"@localdomain");
 		mf.RemoveUser("/^root@/",user+"@localdomain");
@@ -1323,22 +1329,25 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 static bool update_postfix()
 {
 	int ret;
+    SysConfig sysconfig;
 
-	ret = system( "/usr/sbin/postmap " ALIASES );
+    string aliases = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","vmailbox");
+    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + aliases );
+
+	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
+	{
+		return false;
+	}
+    string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","saslpasswd");
+    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + saslpwd );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
 	{
 		return false;
 	}
 
-	ret = system( "/usr/sbin/postmap " SASLPASSWD );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-
-	ret = system( "/usr/sbin/postmap " LOCAL_MAILFILE );
+    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + localmail );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
 	{
@@ -1357,47 +1366,53 @@ static bool update_postfix()
 
 static void postfix_fixpaths()
 {
-	if( ! File::FileExists( ALIASES ) )
+    SysConfig sysconfig;
+
+    string aliases = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","vmailbox");
+    if( ! File::FileExists( aliases ) )
 	{
-		File::Write( ALIASES, "", 0600);
+        File::Write( aliases, "", 0600);
+    }
+
+    string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount")  + sysconfig.GetKeyAsString("mail","saslpasswd");
+    if( ! File::FileExists( saslpwd ) )
+	{
+        File::Write( saslpwd, "", 0600);
 	}
 
-	if( ! File::FileExists( SASLPASSWD ) )
+    string domains = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","vdomains");
+    if( ! File::FileExists( domains ) )
 	{
-		File::Write( SASLPASSWD, "", 0600);
+        File::Write( domains, "", 0600);
 	}
 
-	if( ! File::FileExists( DOMAINFILE ) )
+    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + SysConfig().GetKeyAsString("mail","localmail");
+    if( ! File::FileExists( localmail ) )
 	{
-		File::Write( DOMAINFILE, "", 0600);
+        File::Write( localmail, "", 0600);
 	}
 
-	if( ! File::FileExists( LOCAL_MAILFILE ) )
-	{
-		File::Write( LOCAL_MAILFILE, "", 0600);
-	}
-
-	if( chown( ALIASES, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+    if( chown( aliases.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
 	}
 
-	if( chown( SASLPASSWD, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+    if( chown( saslpwd.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on saslpasswd file"<<lend;
 	}
 
-	if( chown( DOMAINFILE, User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+    if( chown( domains.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on domain file"<<lend;
 	}
 
-	if( chown( File::GetPath(DOMAINFILE).c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+    if( chown( File::GetPath(domains).c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on config directory"<<lend;
 	}
 
-	if( chmod( File::GetPath(DOMAINFILE).c_str(), 0700 ) != 0)
+    if( chmod( File::GetPath(domains).c_str(), 0700 ) != 0)
 	{
 		logg << Logger::Error << "Failed to change mode on config directory"<<lend;
 	}
@@ -1641,7 +1656,8 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	SmtpConfig cfg(SASLPASSWD);
+    string saslpasswd = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","saslpasswd");
+    SmtpConfig cfg(saslpasswd);
 
 	Json::Value ret;
 	switch( cfg.GetMode() )
@@ -1678,7 +1694,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp set settings");
-
+    SysConfig sysconfig;
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
@@ -1690,11 +1706,12 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	}
 
 	string type = cmd["type"].asString();
+    string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","saslpasswd");
 
 	if( type == "OPI")
 	{
 		logg << Logger::Debug << "Set opi mode"<<lend;
-		SmtpConfig smtp( SASLPASSWD );
+        SmtpConfig smtp( saslpwd );
 
 		smtp.SetStandAloneMode();
 	}
@@ -1705,7 +1722,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		{
 			return;
 		}
-		SmtpConfig smtp( SASLPASSWD );
+        SmtpConfig smtp( saslpwd );
 		OPRelayConf conf;
 
 		conf.receive = cmd["receive"].asBool();
@@ -1734,7 +1751,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 			return;
 		}
 
-		SmtpConfig smtp( SASLPASSWD );
+        SmtpConfig smtp( saslpwd );
 
 		smtp.SetCustomMode( conf );
 	}
@@ -2196,14 +2213,14 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		this->SendErrorMessage( client, cmd, 400, "Failed to authenticate");
 		return;
 	}
-
-    if( ! CryptoHelper::MakeCSR(DNS_PRIV_PATH, CSR_PATH, fqdn, "OPI") )
+    string csrfile = File::GetPath(sysconfig.GetKeyAsString("webcertificate","defaultcert")) + "/" + fqdn +".csr";
+    if( ! CryptoHelper::MakeCSR(sysconfig.GetKeyAsString("dns","dnsauthkey"), csrfile, fqdn, "OPI") )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
 		return;
 	}
 
-	string csr = File::GetContentAsString(CSR_PATH, true);
+    string csr = File::GetContentAsString(csrfile, true);
 
 	AuthServer s(unit_id);
 
@@ -2224,9 +2241,10 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	}
 
 	// Make sure we have no symlinked tempcert in place
-	unlink( CERT_PATH );
+    string activecert = sysconfig.GetKeyAsString("webcertificate","activecert");
+    unlink( activecert.c_str() );
 
-	File::Write( CERT_PATH, ret["cert"].asString(), 0644);
+    File::Write( activecert, ret["cert"].asString(), 0644);
 
 	/* Update postfix with new "hostname" */
     logg << Logger::Debug << "Update mail config"<<lend;
@@ -2347,7 +2365,7 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	    	certpath=std::string(buff);
             logg << Logger::Debug << "CertPath used:" << certpath <<lend;
 
-            if ( File::GetFileName(File::RealPath(certpath)) == DEFAULT_CERT )
+            if ( File::GetFileName(File::RealPath(certpath)) == File::GetFileName(sysconfig.GetKeyAsString("webcertificate","defaultcert")) )
 	    	{
 	    		cfg["CertStatus"] = "ERROR";
 	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
@@ -2545,8 +2563,8 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	{
 		return;
 	}
-
-	Json::Value cfg = NetUtils::NetworkConfig().GetInterface( OPI_NETIF );
+    string netif = sysinfo.NetworkDevice();
+    Json::Value cfg = NetUtils::NetworkConfig().GetInterface( netif );
 	Json::Value ret;
 	if( cfg["addressing"].asString() == "static" )
 	{
@@ -2558,8 +2576,8 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	else if( cfg["addressing"].asString() == "dhcp" )
 	{
 		ret["type"] = "dhcp";
-		ret["ipnumber"] = NetUtils::GetAddress( OPI_NETIF );
-		ret["netmask"] = NetUtils::GetNetmask( OPI_NETIF );
+        ret["ipnumber"] = NetUtils::GetAddress( netif );
+        ret["netmask"] = NetUtils::GetNetmask( netif );
 		ret["gateway"] = NetUtils::GetDefaultRoute();
 	}
 	else
@@ -2604,10 +2622,12 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 		return;
 	}
 
+    string netif = sysinfo.NetworkDevice();
+
 	if( type == "dhcp" )
 	{
 		NetUtils::NetworkConfig nc;
-		nc.SetDHCP( OPI_NETIF );
+        nc.SetDHCP( netif );
 		nc.WriteConfig();
 	}
 	else
@@ -2634,7 +2654,7 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 		}
 
 		NetUtils::NetworkConfig nc;
-		nc.SetStatic( OPI_NETIF, cmd["ipnumber"].asString(), cmd["netmask"].asString(), cmd["gateway"].asString() );
+        nc.SetStatic( netif, cmd["ipnumber"].asString(), cmd["netmask"].asString(), cmd["gateway"].asString() );
 		nc.WriteConfig();
 
 		NetUtils::ResolverConfig rc;
@@ -2655,7 +2675,7 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 		rc.WriteConfig();
 	}
 
-	if( ! NetUtils::RestartInterface( OPI_NETIF ) )
+    if( ! NetUtils::RestartInterface( netif ) )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to restart network");
 		return;
@@ -2815,7 +2835,7 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 	int retval;
 	
 	// prints only the line with the data partition and in the order of "total, used, available" in 1k blocks
-	storagescript ="df -l | grep \""+string(DATA_PARTITION)+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
+    storagescript ="df -l | grep \""+SysConfig().GetKeyAsString("filesystem","storagemount")+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
 	tie(retval,ExecOutput)=Process::Exec( storagescript );
 	if ( retval )
 	{

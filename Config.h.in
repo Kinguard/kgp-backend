@@ -9,20 +9,8 @@
 #cmakedefine APP_BUILD_LOCAL
 
 // Mail handling
-#ifdef APP_BUILD_LOCAL
-	#define DOMAINFILE      "domains"
-	#define ALIASES         "vmailbox"
-#endif
-
-#ifdef APP_BUILD_PACKAGE
-	#define DOMAINFILE      "/var/opi/mail/conf/domains"
-	#define ALIASES         "/var/opi/mail/conf/vmailbox"
-#endif
 
 #define FETCHMAILRC	"/var/opi/etc/fetchmailrc"
-#define SASLPASSWD	"/var/opi/mail/conf/sasl_passwd"
-#define LOCAL_MAILFILE "/var/opi/mail/conf/localmail"
-#define VIRTUAL_ALIASES	"/var/opi/mail/conf/virtual"
 
 // For unittests
 #define APP_PATH "@APP_PATH@"
@@ -44,17 +32,10 @@
 #define BACKUP_UMOUNT_FS "/usr/share/opi-backup/umount_fs.sh"
 #define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 
-#define DEFAULT_CERT "opi.cert"
-
 #define PACKAGE_INFO "/etc/opi/packageinfo.conf"
 
 #define NOTIFY_DIR "/var/spool/kgp-notify/"
-#define DATA_PARTITION "/var/opi"
 
 #define OC_CLEAN_SCRIPT "/etc/opi-control/restore/owncloud-reinstall"
-
-#define OPI_NETIF	"eth0"
-
-#define OP_RELAYSERVER	"op-mail.openproducts.com"
 
 #endif
