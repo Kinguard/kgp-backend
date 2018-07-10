@@ -363,7 +363,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	}
 
 	// Add user to local mail
-    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
     MailMapFile mmf( localmail );
 	mmf.ReadConfig();
 	mmf.SetAddress("localdomain", user, user);
@@ -449,7 +449,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	}
 
 	// Remove user from local mail
-    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
     MailMapFile mmf( localmail );
 	mmf.ReadConfig();
 	mmf.DeleteAddress("localdomain", user);
@@ -1346,7 +1346,7 @@ static bool update_postfix()
 		return false;
 	}
 
-    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","localmail");
+    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
     tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + localmail );
 
 	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
@@ -1386,7 +1386,7 @@ static void postfix_fixpaths()
         File::Write( domains, "", 0600);
 	}
 
-    string localmail = SysConfig().GetKeyAsString("filesystem","storagemount") + SysConfig().GetKeyAsString("mail","localmail");
+    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","localmail");
     if( ! File::FileExists( localmail ) )
 	{
         File::Write( localmail, "", 0600);
@@ -2835,7 +2835,8 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 	int retval;
 	
 	// prints only the line with the data partition and in the order of "total, used, available" in 1k blocks
-    storagescript ="df -l | grep \""+SysConfig().GetKeyAsString("filesystem","storagemount")+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
+
+    storagescript ="df -l | grep \""+String::Trimmed(SysConfig().GetKeyAsString("filesystem","storagemount"),"/")+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
 	tie(retval,ExecOutput)=Process::Exec( storagescript );
 	if ( retval )
 	{
