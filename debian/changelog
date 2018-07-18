@@ -1,3 +1,9 @@
+opi-backend (1.13.23) vili; urgency=medium
+
+  * Include webtheme in getType request. 
+
+ -- PA Nilsson <pa@openproducts.se>  Wed, 18 Jul 2018 11:45:04 +0000
+
 opi-backend (1.13.22) vili; urgency=medium
 
   * Fixed paths for storage calculation. 

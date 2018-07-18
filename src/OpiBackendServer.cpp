@@ -2869,6 +2869,15 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
     ret["type"]=type;
     ret["typeText"]=typeText;
 
+    try
+    {
+        ret["theme"] = SysConfig().GetKeyAsString("webapps","theme");
+    }
+    catch( std::runtime_error& err)
+    {
+        logg << Logger::Debug << "No webapps theme set" <<lend;
+    }
+
     this->SendOK(client, cmd, ret);
 
 }
