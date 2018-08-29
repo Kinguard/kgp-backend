@@ -84,7 +84,8 @@ private:
 	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+    void DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+    void DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);

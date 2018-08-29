@@ -159,6 +159,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networksetportstatus"]=&OpiBackendServer::DoNetworkSetPortStatus;
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
+    this->actions["networkgetdomains"]=&OpiBackendServer::DoNetworkGetDomains;
 	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
 	this->actions["networkgetcert"]=&OpiBackendServer::DoNetworkGetCert;
 	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
@@ -2298,6 +2299,40 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 
 }
+
+void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+
+    ScopedLog l("Get Domains!");
+
+
+    if( ! this->CheckLoggedIn(client,cmd) )
+    {
+        return;
+    }
+
+    try
+    {
+        SysConfig sysconfig;
+        Json::Value res(Json::objectValue);
+        Json::Value d(Json::arrayValue);
+        list<string> domains = sysconfig.GetKeyAsStringList("dns","availabledomains");
+
+        for(const auto& val: domains)
+        {
+            d.append(val);
+        }
+        res["availabledomains"] = d;
+
+        this->SendOK(client, cmd, res);
+    }
+    catch (std::runtime_error& e)
+    {
+        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
+        return;
+    }
+}
+
 
 void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
