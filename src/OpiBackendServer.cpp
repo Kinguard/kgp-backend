@@ -2214,7 +2214,9 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		this->SendErrorMessage( client, cmd, 400, "Failed to authenticate");
 		return;
 	}
-    string csrfile = File::GetPath(sysconfig.GetKeyAsString("webcertificate","defaultcert")) + "/" + fqdn +".csr";
+
+    string defaultcert = sysconfig.GetKeyAsString("webcertificate","activecert");
+    string csrfile = File::GetPath(defaultcert) + "/" + fqdn +".csr";
     if( ! CryptoHelper::MakeCSR(sysconfig.GetKeyAsString("dns","dnsauthkey"), csrfile, fqdn, "OPI") )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
@@ -2242,10 +2244,8 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	}
 
 	// Make sure we have no symlinked tempcert in place
-    string activecert = sysconfig.GetKeyAsString("webcertificate","activecert");
-    unlink( activecert.c_str() );
-
-    File::Write( activecert, ret["cert"].asString(), 0644);
+    unlink( defaultcert.c_str());
+    File::Write( defaultcert, ret["cert"].asString(), 0644);
 
 	/* Update postfix with new "hostname" */
     logg << Logger::Debug << "Update mail config"<<lend;
