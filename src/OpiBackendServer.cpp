@@ -2417,6 +2417,7 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 	ScopedLog l("Set Webserver Certificates");
 
 	string CustomCertFile,CustomKeyFile;
+    Json::Value response;
 
 	string certtype = cmd["CertType"].asString();
 	string certificate = cmd["CustomCertVal"].asString();
@@ -2438,7 +2439,26 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
             return;
         }
 
-		this->SendOK( client, cmd);
+        logg << Logger::Debug << "Start generation of external certificates"<<lend;
+        int retval;
+        string msg;
+
+        OPI::ExtCert ec;
+        tie(retval,msg) = ec.GetExternalCertificates(false);
+        logg << Logger::Debug << "Ext Cert returned: " << retval << lend;
+        if ( ! retval )
+        {
+            string errmsg="Failed to generate externally signed certificate";
+            response["errmsg"] = errmsg;
+            logg << Logger::Warning << errmsg << lend;
+            Notify::NewMessage Msg(LOG_WARNING,errmsg);
+            Msg.Send();
+        }
+        this->SendOK(client, cmd, response);
+
+        /* Restart related services */
+        ServiceHelper::Reload("nginx");
+
 	}
 	else if (certtype == "CUSTOMCERT")
 	{
@@ -2537,12 +2557,15 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
                 return;
             }
 
+            // send ok message prior to ngix restart
+            this->SendOK( client, cmd);
+
 			// update config file
 
 			// nginx config is correct, restart webserver
             logg << Logger::Debug << "Reloading Nginx config" << lend;
             ServiceHelper::Reload("nginx");
-            //ServiceHelper::Start("nginx");
+            return;
 		}
 		else
 		{
@@ -3135,6 +3158,7 @@ void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, Json
 void OpiBackendServer::SendReply(UnixStreamClientSocketPtr &client, Json::Value &val)
 {
 	string r = this->writer.write(val);
+    //logg << Logger::Debug << "JSON REPLY "<< r <<lend;
 	client->Write(r.c_str(), r.length());
 }
 
