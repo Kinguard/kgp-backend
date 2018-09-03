@@ -1,3 +1,9 @@
+opi-backend (1.13.25) vili; urgency=medium
+
+  * Writing "default" certificate with OP cert. Part of #474, #478 
+
+ -- PA Nilsson <pa@openproducts.se>  Mon, 03 Sep 2018 07:56:48 +0200
+
 opi-backend (1.13.24) vili; urgency=medium
 
   * Read available domains from sysconfig. 

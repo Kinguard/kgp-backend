@@ -2215,7 +2215,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-    string defaultcert = sysconfig.GetKeyAsString("webcertificate","activecert");
+    string defaultcert = sysconfig.GetKeyAsString("webcertificate","defaultcert");
     string csrfile = File::GetPath(defaultcert) + "/" + fqdn +".csr";
     if( ! CryptoHelper::MakeCSR(sysconfig.GetKeyAsString("dns","dnsauthkey"), csrfile, fqdn, "OPI") )
 	{
