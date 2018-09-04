@@ -1,3 +1,10 @@
+opi-backend (1.13.27) vili; urgency=medium
+
+  * Fixed DeleteUser, #489
+  * Removing data from deleted user, #146 
+
+ -- PA Nilsson <pa@openproducts.se>  Tue, 04 Sep 2018 11:06:46 +0200
+
 opi-backend (1.13.26) vili; urgency=medium
 
   * Reloading webserver after certificate change. 
