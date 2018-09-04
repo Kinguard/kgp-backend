@@ -406,7 +406,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_USR, cmd) )
+    if( ! this->CheckArguments(client, CHK_USR, cmd) )
 	{
 		return;
 	}
@@ -428,13 +428,13 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	vector<string> groups = secop->GetUserGroups( user );
 	bool wasadmin = find( groups.begin(), groups.end(), "admin") != groups.end();
 
-	if( ! secop->RemoveUser( user ) )
+    if( ! secop->RemoveUser( user ) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Failed");
 		return;
 	}
 
-	if( wasadmin )
+    if( wasadmin )
 	{
 		removeuserfrommailadmin( user );
 
@@ -449,19 +449,19 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		}
 	}
 
-	// Remove user from local mail
+    // Remove user from local mail
     string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
     MailMapFile mmf( localmail );
 	mmf.ReadConfig();
 	mmf.DeleteAddress("localdomain", user);
 	mmf.WriteConfig();
 
-	// Remove user from opi-domain
+    // Remove user from opi-domain
     string opiname;
     string domain;
     try {
         opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
-        domain = sysconfig.GetKeyAsString("hostinfo","hostname");
+        domain = sysconfig.GetKeyAsString("hostinfo","domain");
     }
     catch (std::runtime_error& e)
     {
@@ -470,12 +470,41 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
         return;
     }
 
-	MailConfig mc;
-	mc.ReadConfig();
-    mc.DeleteAddress(opiname+"."+domain,user);
-	mc.WriteConfig();
+    MailConfig mc;
+    mc.ReadConfig();
+    try {
+        mc.DeleteAddress(opiname+"."+domain,user);
+    }
+    catch (std::runtime_error& e)
+    {
+        logg << Logger::Error << "Failed to delete user" << e.what() << lend;
+        this->SendErrorMessage(client, cmd, 400, "Failed");
+        return;
+    }
+    mc.WriteConfig();
+    update_postfix();
 
-	update_postfix();
+    // delete the users files and mail
+    logg << Logger::Debug << "Deleting files for user: " << user << lend;
+    try {
+        string storage = sysconfig.GetKeyAsString("filesystem","storagemount");
+        string dir = storage + "/mail/data/" + user;
+        if( File::DirExists(dir.c_str()))
+        {
+            Process::Exec("rm -rf "+ dir);
+        }
+        dir = storage + "/nextcloud/data/" + user;
+        if( File::DirExists(dir.c_str()))
+        {
+            Process::Exec("rm -rf "+ dir);
+        }
+    }
+    catch (std::runtime_error& e)
+    {
+        logg << Logger::Error << "Failed to delete user files" << e.what() << lend;
+        this->SendErrorMessage(client, cmd, 400, "Failed");
+        return;
+    }
 
 	this->SendOK(client, cmd);
 }
