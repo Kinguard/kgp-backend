@@ -102,6 +102,7 @@ private:
 	void DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
     void DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 
 	// Helper functions
@@ -118,6 +119,8 @@ private:
 	bool writeCertificate( string certificate, string &newFile, string oldFile );
 	string getTmpFile(string path, string suffix);
 	string BackendLogin(const string& unit_id);
+
+	string getSysconfigString(string scope, string key);
 
 	// Lifecycle management
 	time_t lastreap;

@@ -179,6 +179,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["dosystemgetstorage"]=&OpiBackendServer::DoSystemGetStorage;
 	this->actions["dosystemgetpackages"]=&OpiBackendServer::DoSystemGetPackages;
     this->actions["dosystemgettype"]=&OpiBackendServer::DoSystemGetType;
+	this->actions["dosystemgetunitid"]=&OpiBackendServer::DoSystemGetUnitid;
 
 
 	// Setup mail paths etc
@@ -2133,10 +2134,11 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 
     try
 	{
-        res["opiname"] = sysconfig.GetKeyAsString("hostinfo","hostname");
+		res["opiname"] = this->getSysconfigString("hostinfo","hostname");
         res["dnsenabled"] = sysconfig.GetKeyAsBool("dns","enabled");
-        res["domain"] = sysconfig.GetKeyAsString("hostinfo","domain");
-        logg << Logger::Debug << "opiname: " << sysconfig.GetKeyAsString("hostinfo","hostname").c_str() << " domain: " << sysconfig.GetKeyAsString("hostinfo","domain").c_str() <<lend;
+		res["provider"] = this->getSysconfigString("dns","provider");
+		res["domain"] = this->getSysconfigString("hostinfo","domain");
+		logg << Logger::Debug << "opiname: " << this->getSysconfigString("hostinfo","hostname").c_str() << " domain: " << this->getSysconfigString("hostinfo","domain").c_str() <<lend;
 
 		this->SendOK(client, cmd, res);
 	}
@@ -2942,6 +2944,26 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 		
 }
 
+void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Get Unitid");
+	Json::Value ret;
+
+	if( !this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	string scope = "hostinfo";
+	string key = "unitid";
+
+	ret[key] = this->getSysconfigString(scope,key);
+
+	this->SendOK(client, cmd, ret);
+
+}
+
+
 void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
     ScopedLog l("Do System Get Type");
@@ -3040,6 +3062,20 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
 		return;
 	}
+}
+
+string OpiBackendServer::getSysconfigString(string scope, string key)
+{
+	try
+	{
+		return SysConfig().GetKeyAsString(scope,key);
+	}
+	catch( std::runtime_error& err)
+	{
+		logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
+		return "";
+	}
+
 }
 
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
