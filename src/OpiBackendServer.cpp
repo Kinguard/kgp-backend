@@ -44,6 +44,7 @@
 #define CHK_TYP 0x00001000  // Check type
 #define CHK_SND 0x00002000  // Check send
 #define CHK_RCV 0x00004000  // Check receive
+#define CHK_DEM 0x00008000  // Check default email
 
 enum ArgCheckType{
 	STRING,
@@ -64,6 +65,7 @@ static vector<ArgCheckLine> argchecks(
 			{ CHK_PWD, "password",		ArgCheckType::STRING },
 			{ CHK_NPW, "newpassword",	ArgCheckType::STRING },
 			{ CHK_DSP, "displayname",	ArgCheckType::STRING },
+			{ CHK_DEM, "defaultemail",	ArgCheckType::STRING },
 			{ CHK_DMN, "domain",		ArgCheckType::STRING },
 			{ CHK_GRP, "group",			ArgCheckType::STRING },
 			{ CHK_ADR, "address",		ArgCheckType::STRING },
@@ -363,6 +365,29 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
+	string opiname;
+	string domain;
+	try
+	{
+		opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
+		domain = sysconfig.GetKeyAsString("hostinfo","domain");
+	}
+	catch (std::runtime_error& e)
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+		return;
+	}
+
+	// set default email in secop
+	string defaultemail = user+"@"+opiname+"."+domain;
+	logg << Logger::Debug << "Setting defult email in secop to: " << defaultemail << lend;
+	if( ! secop->AddAttribute(user, "defaultemail", defaultemail) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+
 	// Add user to local mail
     string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
     MailMapFile mmf( localmail );
@@ -371,21 +396,6 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	mmf.WriteConfig();
 
 	// Add user to opi-domain
-    string opiname;
-    string domain;
-    try
-    {
-        opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
-        domain = sysconfig.GetKeyAsString("hostinfo","domain");
-    }
-    catch (std::runtime_error& e)
-    {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
-        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-        return;
-    }
-
-
 	MailConfig mc;
 	mc.ReadConfig();
     mc.SetAddress(opiname+"."+domain,user,user);
@@ -631,7 +641,7 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_USR|CHK_DSP, cmd) )
+	if( ! this->CheckArguments(client, CHK_USR|CHK_DSP|CHK_DEM, cmd) )
 	{
 		return;
 	}
@@ -641,13 +651,19 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	string token =		cmd["token"].asString();
-	string user =		cmd["username"].asString();
-	string disp =		cmd["displayname"].asString();
+	string token =			cmd["token"].asString();
+	string user =			cmd["username"].asString();
+	string disp =			cmd["displayname"].asString();
+	string defaultemail =	cmd["defaultemail"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
 	if( ! secop->AddAttribute(user, "displayname", disp) )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		return;
+	}
+	if( ! secop->AddAttribute(user, "defaultemail", defaultemail) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
@@ -3156,6 +3172,15 @@ Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
 	{
 		// No error if displayname missing
 		ret["displayname"] ="";
+	}
+	try
+	{
+		ret["defaultemail"] = secop->GetAttribute(user,"defaultemail");
+	}
+	catch( std::runtime_error err)
+	{
+		// No error if default email is missing
+		ret["defaultemail"] ="";
 	}
 
 	return ret;
