@@ -267,27 +267,39 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 	{
 		logg << Logger::Debug << "User seems already logged in, validating anyway"<<lend;
 
-		WebClientPtr wc = this->clients.GetClientByUsername( username );
-		SecopPtr secop = wc->Secop();
+		try {
+			WebClientPtr wc = this->clients.GetClientByUsername( username );
+			SecopPtr secop = wc->Secop();
 
-		if( ! secop )
-		{
-			logg << Logger::Error << "Missing connection to secop"<<lend;
-			this->SendErrorMessage(client, cmd, 500, "Failed connecting to backing store");
-			return;
+			if( ! secop )
+			{
+				logg << Logger::Error << "Missing connection to secop"<<lend;
+				this->SendErrorMessage(client, cmd, 500, "Failed connecting to backing store");
+				return;
+			}
+
+			if( ! secop->PlainAuth(username, password)  )
+			{
+				this->SendErrorMessage(client, cmd, 400, "Failed");
+				return;
+			}
+
+			// User reauthorized?? Return same token
+			Json::Value ret;
+			ret["token"] = wc->Token();
+
+			this->SendOK(client, cmd, ret);
 		}
-
-		if( ! secop->PlainAuth(username, password)  )
+		catch (std::runtime_error& err)
 		{
+			logg << Logger::Notice << "Failed to (re)authenticate user. Stale connection?"
+				 << " (" << err.what() << ")"
+				 << lend;
+
+			// Todo, fix generic cleanup.
+
 			this->SendErrorMessage(client, cmd, 400, "Failed");
-			return;
 		}
-
-		// User reauthorized?? Return same token
-		Json::Value ret;
-		ret["token"] = wc->Token();
-
-		this->SendOK(client, cmd, ret);
 
 		return;
 	}
