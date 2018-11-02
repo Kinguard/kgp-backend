@@ -20,6 +20,8 @@
 #include <libopi/SysInfo.h>
 #include <libopi/ExtCert.h>
 #include <libopi/SysConfig.h>
+#include <libopi/BackupHelper.h>
+#include <libopi/IdentityManager.h>
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
@@ -160,7 +162,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
     this->actions["networkgetdomains"]=&OpiBackendServer::DoNetworkGetDomains;
-	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
+//	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
 	this->actions["networkgetcert"]=&OpiBackendServer::DoNetworkGetCert;
 	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
 	this->actions["networkcheckcert"]=&OpiBackendServer::DoNetworkCheckCert;
@@ -180,6 +182,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["dosystemgetpackages"]=&OpiBackendServer::DoSystemGetPackages;
     this->actions["dosystemgettype"]=&OpiBackendServer::DoSystemGetType;
 	this->actions["dosystemgetunitid"]=&OpiBackendServer::DoSystemGetUnitid;
+	this->actions["dosystemsetunitid"]=&OpiBackendServer::DoSystemSetUnitid;
 
 
 	// Setup mail paths etc
@@ -1147,7 +1150,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     }
     else
     {
-        res["location"] = "remote";  // Show as default target in UI
+		res["location"] = "op";  // Show as default target in UI
     }
     res["type"] = type;
     res["AWSbucket"] = bucket;
@@ -2173,110 +2176,88 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
     string olddomain;
     string fqdn;
 
+	unit_id = this->getSysconfigString("hostinfo","unitid");
     try
     {
-        unit_id = sysconfig.GetKeyAsString("hostinfo","unitid");
         oldopiname = sysconfig.GetKeyAsString("hostinfo","hostname");
         hostname = cmd["hostname"].asString();
         domain = cmd["domain"].asString();
         olddomain = sysconfig.GetKeyAsString("hostinfo","domain");
         fqdn = hostname+"."+domain;
+
     }
     catch (std::runtime_error& e)
     {
         this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
     }
 
+	try
+	{
+		sysconfig.PutKey("dns","enabled",cmd["dnsenabled"].asBool());
+	}
+	catch (std::runtime_error& e)
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+		return;
+	}
+
     if( (hostname == oldopiname) && (olddomain == domain))
 	{
 		// no need to do any updates on server side
-		// make sure dns is enabled and return vith OK
-        try
-        {
-            sysconfig.PutKey("dns","enabled",true);
-        }
-        catch (std::runtime_error& e)
-        {
-            this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-            logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-            return;
-        }
+		logg << Logger::Debug << "No name update"<<lend;
 
 		this->SendOK(client, cmd);
 		return;
 	}
-	if( unit_id == "" )
+
+	logg << Logger::Debug << "Update sysconfig with new name"<<lend;
+	// Update sysconfig with new name
+	try
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to retrieve unit id");
+		sysconfig.PutKey("hostinfo","hostname",hostname);
+		sysconfig.PutKey("hostinfo","domain",domain);
+		sysconfig.PutKey("dns","enabled",true);
+
+	}
+	catch (std::runtime_error& e)
+	{
+		this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+		return;
+	}
+
+	list<string> domains = sysconfig.GetKeyAsStringList("dns","availabledomains");
+	bool domainIsOpDomain = false;
+
+	for(const auto& d: domains)
+	{
+		if ( domain == d )
+		{
+			domainIsOpDomain = true;
+		}
+	}
+
+
+	if( unit_id == "" || ! domainIsOpDomain)
+	{
+		this->SendErrorMessage( client, cmd, 500, "Unable to generate OP cert.");
 		return;
 	}
 
 	/* Try update DNS, i.e. reserve name */
-	OPI::DnsServer dns;
-    logg << Logger::Debug << "Try to set new device name on server"<<lend;
-
-    if( !dns.UpdateDynDNS(unit_id, fqdn) )
-	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to set opi name");
-		return;
-	}
-
-    logg << Logger::Debug << "Update sysconfig with new name"<<lend;
-    // Update sysconfig with new name
-    try
-    {
-        sysconfig.PutKey("hostinfo","hostname",hostname);
-        sysconfig.PutKey("hostinfo","domain",domain);
-        sysconfig.PutKey("dns","enabled",true);
-
-    }
-    catch (std::runtime_error& e)
-    {
-        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-        return;
-    }
 
 	/* Get a signed certificate for the new name */
-    logg << Logger::Debug << "Get OP cert"<<lend;
-	string token = this->BackendLogin( unit_id );
-	if( token == "" )
+	logg << Logger::Info << "Update OP DNS / cert"<<lend;
+
+	IdentityManager& idmgr = IdentityManager::Instance();
+	if( ! idmgr.AddDnsName(hostname,domain) )
 	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to authenticate");
+		this->SendErrorMessage( client, cmd, 400, "Failed to get new certificate");
 		return;
 	}
 
-    string defaultcert = sysconfig.GetKeyAsString("webcertificate","defaultcert");
-    string csrfile = File::GetPath(defaultcert) + "/" + fqdn +".csr";
-    if( ! CryptoHelper::MakeCSR(sysconfig.GetKeyAsString("dns","dnsauthkey"), csrfile, fqdn, "OPI") )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed create CSR");
-		return;
-	}
 
-    string csr = File::GetContentAsString(csrfile, true);
-
-	AuthServer s(unit_id);
-
-	int resultcode;
-	Json::Value ret;
-	tie(resultcode, ret) = s.GetCertificate(csr, token );
-
-	if( resultcode != 200 )
-	{
-		this->SendErrorMessage( client, cmd, 400, "Failed get signed certificate");
-		return;
-	}
-
-	if( ! ret.isMember("cert") || ! ret["cert"].isString() )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Malformed reply from server");
-		return;
-	}
-
-	// Make sure we have no symlinked tempcert in place
-    unlink( defaultcert.c_str());
-    File::Write( defaultcert, ret["cert"].asString(), 0644);
 
 	/* Update postfix with new "hostname" */
     logg << Logger::Debug << "Update mail config"<<lend;
@@ -2365,9 +2346,10 @@ void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Js
 }
 
 
+/*
 void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
-	ScopedLog l("Disalbe OPI DNS");
+	ScopedLog l("Disable OPI DNS");
     SysConfig sysconfig(true);
 	if( ! this->CheckLoggedIn(client,cmd) )
 	{
@@ -2387,7 +2369,7 @@ void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Js
 
 	this->SendOK(client, cmd);
 }
-
+*/
 void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Get Webserver Certificates");
@@ -2948,18 +2930,196 @@ void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json
 {
 	ScopedLog l("Do System Get Unitid");
 	Json::Value ret;
+	string scope;
+	string key;
 
 	if( !this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
 
-	string scope = "hostinfo";
-	string key = "unitid";
-
+	scope = "hostinfo";
+	key = "unitid";
 	ret[key] = this->getSysconfigString(scope,key);
 
+	key = "unitidbak";
+	ret[key] = this->getSysconfigString(scope,key);
+
+	scope = "dns";
+	key = "provider";
+	ret[key] = this->getSysconfigString(scope,key);
+	key = "enabled";
+	ret[key] = this->getSysconfigBool(scope,key);
+
 	this->SendOK(client, cmd, ret);
+
+}
+
+void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do System Set Unitid");
+	Json::Value ret;
+
+	string passphrase;
+	bool passphrasefound = false;
+
+	if( !this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+
+	// Manually verify passed parameters
+	if( !cmd.isMember("unitid") && !cmd["unitid"].isString() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+	if( !cmd.isMember("mpwd") && !cmd["mpwd"].isString() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+	if( !cmd.isMember("enabled") && !cmd["enabled"].isBool() )
+	{
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return;
+	}
+
+	string mpwd = cmd["mpwd"].asString();
+	string unitid = cmd["unitid"].asString();
+	bool enabled = cmd["enabled"].asBool();
+
+	// Read fs-passphrase from backup config.
+	string authfile = this->getSysconfigString("backup","authfile");
+	list<string> authdata = File::GetContent(authfile);
+	if ( authfile == "" ){
+		logg << Logger::Info<< "No backup authfile found, unable to verify MPWD: " <<lend;
+		this->SendErrorMessage(client, cmd, 400, "Unable to verify Master Password");
+		return;
+	}
+
+	// Find the passphrase
+	for( auto authline: authdata )
+	{
+		list<string> data = String::Split(authline,":");
+		if ( data.front() == "fs-passphrase")
+		{
+			passphrase = data.back();
+			passphrasefound = true;
+			logg << Logger::Debug << "Read passphrase: " << passphrase <<lend;
+			break;
+		}
+	}
+	if( ! passphrasefound )
+	{
+		logg << Logger::Info<< "No backup passphrase found, unable to verify MPWD: " <<lend;
+		this->SendErrorMessage(client, cmd, 400, "Unable to verify Master Password");
+		return;
+	}
+
+	// Input data confirmed, move on to verify password.
+
+
+	string calc_passphrase;
+	SecString spass(mpwd.c_str(), mpwd.size() );
+	SecVector<byte> key = PBKDF2( spass, 20);
+	vector<byte> ukey(key.begin(), key.end());
+
+	calc_passphrase = Base64Encode( ukey );
+	logg << Logger::Debug<< "Calculated passphrase: " << calc_passphrase <<lend;
+
+	if ( passphrase != calc_passphrase)
+	{
+		logg << Logger::Info<< "Incorrect Master Password" <<lend;
+		this->SendErrorMessage(client, cmd, 403, "Incorrect Master Password");
+		return;
+	}
+
+	SysConfig sysconfig(true);
+	if ( enabled )
+	{
+		// Try to login and set system keys
+		bool status;
+		string token;
+
+		tie(status,token) = this->UploadKeys(unitid,mpwd);
+
+		if (! status )
+		{
+			logg << Logger::Error<< "Failed to login to backend" <<lend;
+			this->SendErrorMessage(client, cmd, 500, "Failed to login to backend");
+			return;
+		}
+		else
+		{
+			logg << Logger::Error<< "Received token from server: " << token <<lend;
+
+			// Try to upload dns-key
+			stringstream pk;
+			for( auto row: File::GetContent(SCFG.GetKeyAsString("dns","dnspubkey")) )
+			{
+				pk << row << "\n";
+			}
+			DnsServer dns;
+			string pubkey = Base64Encode( pk.str() );
+			if(! dns.RegisterPublicKey(unitid, pubkey, token ))
+			{
+				logg << Logger::Error<< "Failed to upload DNS key" <<lend;
+				this->SendErrorMessage(client, cmd, 500, "Failed to upload DNS key");
+				return;
+			}
+
+		}
+		try
+		{
+			sysconfig.PutKey("hostinfo","unitid",unitid);
+			sysconfig.PutKey("dns","enabled",true);
+			if ( sysconfig.HasKey("hostinfo","unitidbak") )
+			{
+				sysconfig.RemoveKey("hostinfo","unitidbak");
+			}
+		}
+		catch ( std::runtime_error& err )
+		{
+			logg << Logger::Error<< "Failed to set keys in sysconfig" <<lend;
+			this->SendErrorMessage(client, cmd, 500, "Failed to set keys in sysconfig");
+			return;
+		}
+
+	}
+	else
+	{
+		try
+		{
+			if ( this->getSysconfigString("backup","backend") == "s3op://")
+			{
+				// unmount OP backend to have a clean backup, but let target stay on
+				// OP servers so that it will fail next time to make user aware that
+				// backups do not work anymore.
+				OPI::BackupHelperPtr backuphelper;
+				backuphelper = BackupHelperPtr( new BackupHelper( "" ) );
+				backuphelper->UmountRemote();
+			}
+			sysconfig.PutKey("hostinfo","unitidbak",unitid);
+			sysconfig.PutKey("dns","enabled",false);
+			if ( sysconfig.HasKey("hostinfo","unitid") )
+			{
+				sysconfig.RemoveKey("hostinfo","unitid");
+			}
+		}
+		catch ( std::runtime_error& err )
+		{
+			logg << Logger::Error<< "Failed to disabled keys in sysconfig" <<lend;
+			this->SendErrorMessage(client, cmd, 500, "Failed to disable keys in sysconfig");
+			return;
+		}
+	}
+	this->SendOK(client, cmd, ret);
+	if ( ! enabled )
+	{
+	}
+
 
 }
 
@@ -3066,16 +3226,34 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 
 string OpiBackendServer::getSysconfigString(string scope, string key)
 {
-	try
+	if ( SysConfig().HasKey(scope,key) )
 	{
-		return SysConfig().GetKeyAsString(scope,key);
+		try
+		{
+			return SysConfig().GetKeyAsString(scope,key);
+		}
+		catch( std::runtime_error& err)
+		{
+			logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
+		}
 	}
-	catch( std::runtime_error& err)
-	{
-		logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
-		return "";
-	}
+	return "";
+}
 
+bool OpiBackendServer::getSysconfigBool(string scope, string key)
+{
+	if ( SysConfig().HasKey(scope,key) )
+	{
+		try
+		{
+			return SysConfig().GetKeyAsBool(scope,key);
+		}
+		catch( std::runtime_error& err)
+		{
+			logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
+		}
+	}
+	return false;
 }
 
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
@@ -3417,4 +3595,204 @@ string OpiBackendServer::getTmpFile(string path,string suffix)
 		filename = path+String::UUID()+suffix;		
 	}
 	return filename;
+}
+
+bool OpiBackendServer::RegisterKeys() {
+	logg << Logger::Debug << "Register keys"<<lend;
+	string sysauthkey = SCFG.GetKeyAsString("hostinfo","sysauthkey");
+	string syspubkey = SCFG.GetKeyAsString("hostinfo","syspubkey");
+	string dnsauthkey = SCFG.GetKeyAsString("dns","dnsauthkey");
+	string dnspubkey = SCFG.GetKeyAsString("dns","dnspubkey");
+	try{
+		Secop s;
+
+		s.SockAuth();
+		list<map<string,string>> ids;
+
+		try
+		{
+			ids = s.AppGetIdentifiers("op-backend");
+		}
+		catch( __attribute__((unused)) runtime_error& err )
+		{
+			// Do nothing, appid is missing but thats ok.
+		}
+
+		if( ids.size() == 0 )
+		{
+			logg << Logger::Debug << "No keys in secop" << lend;
+			s.AppAddID("op-backend");
+
+			RSAWrapper ob;
+			ob.GenerateKeys();
+
+			// Write to disk
+			string priv_path = File::GetPath( sysauthkey );
+			if( ! File::DirExists( priv_path ) )
+			{
+				File::MkPath( priv_path, 0755);
+			}
+
+			string pub_path = File::GetPath( syspubkey );
+			if( ! File::DirExists( pub_path ) )
+			{
+				File::MkPath( pub_path, 0755);
+			}
+
+
+			// Write to secop
+			map<string,string> data;
+
+			data["type"] = "backendkeys";
+			data["pubkey"] = Base64Encode(ob.GetPubKeyAsDER());
+			data["privkey"] = Base64Encode(ob.GetPrivKeyAsDER());
+			s.AppAddIdentifier("op-backend", data);
+
+			logg << Logger::Debug << "Move (if existing) old private key"<<lend;
+			if ( File::FileExists(sysauthkey)) {
+				string oldsysauthkey = File::GetContentAsString( sysauthkey,true );
+				File::Write(sysauthkey+".old",oldsysauthkey, 0600 );
+			}
+			if ( File::FileExists(syspubkey)) {
+				string oldsyspubkey = File::GetContentAsString(syspubkey,true );
+				File::Write(syspubkey+".old",oldsyspubkey, 0644 );
+			}
+
+			File::Write(sysauthkey, ob.PrivKeyAsPEM(), 0600 );
+			File::Write(syspubkey, ob.PubKeyAsPEM(), 0644 );
+		}
+
+
+		string priv_path = File::GetPath( dnsauthkey );
+		if( ! File::DirExists( priv_path ) )
+		{
+			File::MkPath( priv_path, 0755);
+		}
+
+		string pub_path = File::GetPath( dnspubkey );
+		if( ! File::DirExists( pub_path ) )
+		{
+			File::MkPath( pub_path, 0755);
+		}
+
+		if( ! File::FileExists( dnsauthkey) || ! File::FileExists( dnspubkey ) )
+		{
+			RSAWrapper dns;
+			dns.GenerateKeys();
+
+			if ( File::FileExists(sysauthkey)) {
+				string olddnsauthkey = File::GetContentAsString( dnsauthkey,true );
+				File::Write(dnsauthkey+".old",olddnsauthkey, 0600 );
+			}
+			if ( File::FileExists(syspubkey)) {
+				string olddnspubkey = File::GetContentAsString(dnspubkey,true );
+				File::Write(dnspubkey+".old",olddnspubkey, 0644 );
+			}
+
+			File::Write(dnsauthkey, dns.PrivKeyAsPEM(), 0600 );
+			File::Write(dnspubkey, dns.PubKeyAsPEM(), 0644 );
+		}
+
+	}
+	catch( runtime_error& err)
+	{
+		logg << Logger::Notice << "Failed to register keys " << err.what() << lend;
+		return false;
+	}
+	return true;
+}
+
+tuple<bool,string> OpiBackendServer::UploadKeys(string unitid,string mpwd)
+{
+	AuthServer s(unitid);
+	int resultcode;
+	string token;
+	Json::Value ret;
+
+	tie(resultcode, ret) = s.Login();
+	logg << Logger::Debug << "Login resultcode from server: " << resultcode <<lend;
+
+	if( resultcode != 200 && resultcode != 403 && resultcode != 503)
+	{
+		logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
+		return make_tuple(false,"");
+	}
+	if( resultcode == 503 )
+	{
+		// keys are missing in secop, register new keys in secop.
+		if ( ! this->RegisterKeys() )
+		{
+			logg << Logger::Error << "Failed to register keys"<< resultcode <<lend;
+			return make_tuple(false,"");
+		}
+		// try to login again
+		tie(resultcode, ret) = s.Login();
+		logg << Logger::Debug << "Retry Login resultcode from server: " << resultcode <<lend;
+		if( resultcode != 200 && resultcode != 403 )
+		{
+			logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
+			return make_tuple(false,"");
+		}
+	}
+
+	if( resultcode == 403  || resultcode == 503 )
+	{
+		logg << Logger::Debug << "Send Secret"<<lend;
+
+		if( ! ret.isMember("reply") || ! ret["reply"].isMember("challange")  )
+		{
+			logg << Logger::Error << "Missing argument from server "<< resultcode <<lend;
+			return make_tuple(false,"");
+		}
+
+		// Got new challenge to encrypt with master
+		string challenge = ret["reply"]["challange"].asString();
+
+		RSAWrapperPtr c = AuthServer::GetKeysFromSecop();
+
+		SecVector<byte> key = PBKDF2(SecString(mpwd.c_str(), mpwd.size() ), 32 );
+		AESWrapper aes( key );
+
+		string cryptchal = Base64Encode( aes.Encrypt( challenge ) );
+
+		tie(resultcode, ret) = s.SendSecret(cryptchal, Base64Encode(c->PubKeyAsPEM()) );
+		if( resultcode != 200 )
+		{
+			if( resultcode == 403)
+			{
+				logg << Logger::Debug << "Access denied to OP servers"<<lend;
+				return make_tuple(false,"");
+			}
+			else
+			{
+				logg << Logger::Debug << "Failed to communicate with OP server"<<lend;
+				return make_tuple(false,"");
+			}
+		}
+
+		if( ret.isMember("token") && ret["token"].isString() )
+		{
+			token = ret["token"].asString();
+		}
+		else
+		{
+			logg << Logger::Error << "Missing argument in reply"<<lend;
+			return make_tuple(false,"");
+		}
+
+	}
+	else
+	{
+		if( ret.isMember("token") && ret["token"].isString() )
+		{
+			token = ret["token"].asString();
+		}
+		else
+		{
+			logg << Logger::Error << "Missing argument in reply"<<lend;
+			return make_tuple(false,"");
+		}
+	}
+
+	return make_tuple(true,token);
 }

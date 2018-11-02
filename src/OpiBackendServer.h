@@ -85,7 +85,7 @@ private:
 	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
     void DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-    void DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+//    void DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
@@ -103,6 +103,12 @@ private:
 	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
     void DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
+
+	// Key management
+	bool RegisterKeys();
+	tuple<bool,string> UploadKeys(string unitid, string mpwd);
 
 
 	// Helper functions
@@ -121,6 +127,7 @@ private:
 	string BackendLogin(const string& unit_id);
 
 	string getSysconfigString(string scope, string key);
+	bool getSysconfigBool(string scope, string key);
 
 	// Lifecycle management
 	time_t lastreap;
