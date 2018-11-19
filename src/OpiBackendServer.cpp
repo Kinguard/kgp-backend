@@ -21,7 +21,7 @@
 #include <libopi/ExtCert.h>
 #include <libopi/SysConfig.h>
 #include <libopi/BackupHelper.h>
-#include <libopi/IdentityManager.h>
+#include <kinguard/IdentityManager.h>
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
@@ -162,7 +162,6 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networkgetopiname"]=&OpiBackendServer::DoNetworkGetOpiName;
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
     this->actions["networkgetdomains"]=&OpiBackendServer::DoNetworkGetDomains;
-//	this->actions["networkdisabledns"]=&OpiBackendServer::DoNetworkDisableDNS;
 	this->actions["networkgetcert"]=&OpiBackendServer::DoNetworkGetCert;
 	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
 	this->actions["networkcheckcert"]=&OpiBackendServer::DoNetworkCheckCert;
@@ -2155,9 +2154,10 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 
 void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
+
 	ScopedLog l("Set OPI name");
-    Json::Value response(Json::objectValue);
-    SysConfig sysconfig(true);
+	Json::Value response(Json::objectValue);
+	KGP::IdentityManager& idmgr = KGP::IdentityManager::Instance();
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
@@ -2169,40 +2169,49 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-    string unit_id;
-    string oldopiname;
-    string hostname;
-    string domain;
-    string olddomain;
-    string fqdn;
+	string oldopiname;
+	string hostname;
+	string domain;
+	string olddomain;
+	string fqdn;
+	bool enableDns;
 
-	unit_id = this->getSysconfigString("hostinfo","unitid");
-    try
-    {
-        oldopiname = sysconfig.GetKeyAsString("hostinfo","hostname");
-        hostname = cmd["hostname"].asString();
-        domain = cmd["domain"].asString();
-        olddomain = sysconfig.GetKeyAsString("hostinfo","domain");
-        fqdn = hostname+"."+domain;
+	oldopiname = idmgr.GetHostname();
+	olddomain = idmgr.GetDomain();
 
-    }
-    catch (std::runtime_error& e)
-    {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
-    }
+	hostname = cmd["hostname"].asString();
+	domain = cmd["domain"].asString();
+	enableDns = cmd["enabledns"].asBool();
 
-	try
+	fqdn = hostname+"."+domain;
+
+	bool managedDomain = idmgr.DnsDomainAvailable(domain);
+	/* If the domain is in the list of available domains, check with provider.
+		*  if the domain is "custom", there is no DNS provider to check with...
+		*/
+	if ( managedDomain )
 	{
-		sysconfig.PutKey("dns","enabled",cmd["dnsenabled"].asBool());
-	}
-	catch (std::runtime_error& e)
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-		return;
+		// if the domain is in the available domains, check that the full FQDN is available
+		if ( ! idmgr.DnsNameAvailable(hostname,domain) )
+		{
+			this->SendErrorMessage( client, cmd, 401, "FQDN not available");
+			logg << Logger::Error << "FQDN not available: " << hostname << "@" << domain << lend;
+			return;
+		}
+		if ( enableDns )
+		{
+			idmgr.EnableDNS();
+		}
+		else
+		{
+			idmgr.DisableDNS();
+		}
+
+	} else {
+		idmgr.DisableDNS();
 	}
 
-    if( (hostname == oldopiname) && (olddomain == domain))
+	if( (hostname == oldopiname) && (olddomain == domain))
 	{
 		// no need to do any updates on server side
 		logg << Logger::Debug << "No name update"<<lend;
@@ -2213,102 +2222,62 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 	logg << Logger::Debug << "Update sysconfig with new name"<<lend;
 	// Update sysconfig with new name
-	try
+	if ( !idmgr.SetFqdn(hostname,domain) )
 	{
-		sysconfig.PutKey("hostinfo","hostname",hostname);
-		sysconfig.PutKey("hostinfo","domain",domain);
-		sysconfig.PutKey("dns","enabled",true);
-
-	}
-	catch (std::runtime_error& e)
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
+		this->SendErrorMessage( client, cmd, 500, "Failed to set hostname/domain config parameters");
+		logg << Logger::Error << "Failed to set hostname/domain config parameters" << lend;
 		return;
 	}
 
-	list<string> domains = sysconfig.GetKeyAsStringList("dns","availabledomains");
-	bool domainIsOpDomain = false;
 
-	for(const auto& d: domains)
-	{
-		if ( domain == d )
+	if ( managedDomain ) {
+		/* Try update DNS, i.e. reserve name */
+		logg << Logger::Info << "Update DNS" << lend;
+		if( ! idmgr.AddDnsName(hostname,domain) )
 		{
-			domainIsOpDomain = true;
+			this->SendErrorMessage( client, cmd, 400, "Failed to register new name/domain");
+			return;
 		}
 	}
 
-
-	if( unit_id == "" || ! domainIsOpDomain)
+	/* Generate certificates */
+	logg << Logger::Info << "Generate certificates" << lend;
+	if ( !idmgr.CreateCertificate() )
 	{
-		this->SendErrorMessage( client, cmd, 500, "Unable to generate OP cert.");
+		this->SendErrorMessage( client, cmd, 400, "Failed to generate certificate(s)");
 		return;
 	}
-
-	/* Try update DNS, i.e. reserve name */
-
-	/* Get a signed certificate for the new name */
-	logg << Logger::Info << "Update OP DNS / cert"<<lend;
-
-	IdentityManager& idmgr = IdentityManager::Instance();
-	if( ! idmgr.AddDnsName(hostname,domain) )
-	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to get new certificate");
-		return;
-	}
-
-
 
 	/* Update postfix with new "hostname" */
-    logg << Logger::Debug << "Update mail config"<<lend;
-    File::Write("/etc/mailname", fqdn, 0644);
+	/*
+		logg << Logger::Debug << "Update mail config"<<lend;
+		File::Write("/etc/mailname", fqdn, 0644);
 
-	MailConfig mc;
-    try
-    {
-        mc.ReadConfig();
-        mc.ChangeDomain(oldopiname+"."+domain,fqdn);
-        mc.WriteConfig();
-    }
-    catch (std::runtime_error& err)
-    {
-        string errmsg="Failed to update domain in MailConfig";
-        response["errmsg"]=errmsg;
-        logg << Logger::Error << "Caught exception: " << err.what() <<lend;
-        Notify::NewMessage Msg(LOG_ERR,errmsg);
-        Msg.Send();
-    }
+		MailConfig mc;
+		try
+		{
+			mc.ReadConfig();
+			mc.ChangeDomain(oldopiname+"."+domain,fqdn);
+			mc.WriteConfig();
+		}
+		catch (std::runtime_error& err)
+		{
+			string errmsg="Failed to update domain in MailConfig";
+			response["errmsg"]=errmsg;
+			logg << Logger::Error << "Caught exception: " << err.what() <<lend;
+			Notify::NewMessage Msg(LOG_ERR,errmsg);
+			Msg.Send();
+		}
+		*/
 
-    //this->SendOK(client, cmd);
+	this->SendOK(client, cmd, response);
 
-
-
-    /* Try to get a signed external certificate */
-    /* The script(s) responsible for external certs shall read hostname and domain from sysinfo */
-    logg << Logger::Debug << "Start generation of external certificates"<<lend;
-    int retval;
-    string msg;
-
-    OPI::ExtCert ec;
-    tie(retval,msg) = ec.GetExternalCertificates(false);
-    logg << Logger::Debug << "Ext Cert returned: " << retval << lend;
-    if ( ! retval )
-    {
-        string errmsg=" Failed to generate new externally signed certificate when setting name '"+fqdn+"'.";
-        response["errmsg"] = response["errmsg"].asString() + errmsg;
-        logg << Logger::Warning << errmsg << lend;
-        Notify::NewMessage Msg(LOG_WARNING,errmsg);
-        Msg.Send();
-
-    }
-
-    this->SendOK(client, cmd, response);
-
-
-    /* Restart related services */
-    update_postfix();
-    ServiceHelper::Reload("nginx");
-
+	/* Restart related services */
+	/* Do this here since we do not want to restart nginx with a new certificate before we
+		 * send the response to this call. */
+	// update_postfix();
+	ServiceHelper::Reload("nginx");
+	idmgr.CleanUp();
 
 }
 
@@ -2440,7 +2409,11 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 
 	if (certtype == "LETSENCRYPT") 
 	{
-        // actual certificate generation and updates handled by kinguard-certhandler triggered by cron
+		// Actual certificate generation and updates handled by kinguard-certhandler triggered by cron
+		// if a change in hostname / domain is done, certificate generation is triggered by the "SetOpiName"
+		// This means that it will take a while to get the cert if only the cert option is changed,
+		// but there will be no race condition with SetOpiName since this function is also always triggered from
+		// the UI at _same_ time as SetOpiName.
         try
         {
             sysconfig.PutKey("webcertificate","backend",certtype);
@@ -2452,26 +2425,7 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
             return;
         }
 
-        logg << Logger::Debug << "Start generation of external certificates"<<lend;
-        int retval;
-        string msg;
-
-        OPI::ExtCert ec;
-        tie(retval,msg) = ec.GetExternalCertificates(false);
-        logg << Logger::Debug << "Ext Cert returned: " << retval << lend;
-        if ( ! retval )
-        {
-            string errmsg="Failed to generate externally signed certificate";
-            response["errmsg"] = errmsg;
-            logg << Logger::Warning << errmsg << lend;
-            Notify::NewMessage Msg(LOG_WARNING,errmsg);
-            Msg.Send();
-        }
         this->SendOK(client, cmd, response);
-
-        /* Restart related services */
-        ServiceHelper::Reload("nginx");
-
 	}
 	else if (certtype == "CUSTOMCERT")
 	{

@@ -23,6 +23,7 @@ using namespace Utils;
 using namespace Utils::Net;
 using namespace std;
 using namespace OPI;
+using namespace KGP;
 
 class OpiBackendServer: public Utils::Net::NetServer
 {
