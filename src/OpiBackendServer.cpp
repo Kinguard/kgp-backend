@@ -21,11 +21,16 @@
 #include <libopi/ExtCert.h>
 #include <libopi/SysConfig.h>
 #include <libopi/BackupHelper.h>
+
 #include <kinguard/IdentityManager.h>
+
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
 #include <regex>
+
+using namespace KGP;
+
 
 /*
  * Bit patterns for argument checks
@@ -81,24 +86,6 @@ static vector<ArgCheckLine> argchecks(
 
 // Forwards
 static bool CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type);
-
-// Convenience class for debug/trace
-class ScopedLog: public NoCopy
-{
-private:
-	string name;
-public:
-	ScopedLog(const string& name): name(name)
-	{
-		logg << Logger::Debug << name << " start"<<lend;
-	}
-
-	virtual ~ScopedLog()
-	{
-		logg << Logger::Debug << name << " stop"<<lend;
-	}
-
-};
 
 // Utility function forwards
 static bool update_postfix();

@@ -2,7 +2,8 @@ project(opi-backend)
 cmake_minimum_required(VERSION 2.8)
 
 include( FindPkgConfig )
-pkg_check_modules ( LIBOPI REQUIRED libopi>=1.5 )
+pkg_check_modules ( LIBOPI REQUIRED libopi>=1.6.44 )
+pkg_check_modules  ( LIBKINGUARD REQUIRED libkinguard )
 pkg_check_modules ( LIBNOTIFY REQUIRED libkgpnotify )
 
 set (OPIB_VERSION_MAJOR 1)
@@ -32,12 +33,13 @@ aux_source_directory(. SRC_LIST)
 
 include_directories (
 		"${LIBOPI_INCLUDE_DIRS}"
+		${LIBKINGUARD_INCLUDE_DIRS}
 	)
 
 add_definitions( -std=c++11 )
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
-target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} ${LIBNOTIFY_LDFLAGS} -lkgpnotify)
+target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} ${LIBNOTIFY_LDFLAGS} ${LIBKINGUARD_LDFLAGS} -lkgpnotify)
 
 enable_testing()
 add_test( NAME TestApp COMMAND testapp )
