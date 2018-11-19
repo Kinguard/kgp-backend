@@ -2,6 +2,7 @@ project(opi-backend)
 cmake_minimum_required(VERSION 2.8)
 
 include( FindPkgConfig )
+pkg_check_modules ( LIBUTILS REQUIRED libutils>=1.5.12 )
 pkg_check_modules ( LIBOPI REQUIRED libopi>=1.6.44 )
 pkg_check_modules  ( LIBKINGUARD REQUIRED libkinguard )
 pkg_check_modules ( LIBNOTIFY REQUIRED libkgpnotify )
