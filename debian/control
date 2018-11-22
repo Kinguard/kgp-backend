@@ -16,11 +16,12 @@ Build-Depends: debhelper (>= 8.0.0),
 	libssl-dev,
 	libkgpnotify-dev,
 	libopi-dev,
-	libcppunit-dev
+	libcppunit-dev,
+	libkinguard-dev (>=1.0.1)
 Standards-Version: 3.9.4
 Homepage: http://www.openproducts.com
 
 Package: opi-backend
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, secop, kinguard-certhandler
+Depends: ${shlibs:Depends}, ${misc:Depends}, secop, kinguard-certhandler, libkinguard1, libopi1
 Description: OPI backend manages admin ops for OPI

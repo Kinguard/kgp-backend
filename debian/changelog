@@ -1,3 +1,9 @@
+opi-backend (1.14.0) vili; urgency=medium
+
+  * Add dep on libkinguard, start using libkinguard "Managers" 
+
+ -- PA Nilsson <pa@openproducts.se>  Thu, 22 Nov 2018 12:11:00 +0100
+
 opi-backend (1.13.27) vili; urgency=medium
 
   * Fixed DeleteUser, #489

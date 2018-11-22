@@ -150,7 +150,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["networksetopiname"]=&OpiBackendServer::DoNetworkSetOpiName;
     this->actions["networkgetdomains"]=&OpiBackendServer::DoNetworkGetDomains;
 	this->actions["networkgetcert"]=&OpiBackendServer::DoNetworkGetCert;
-	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
+//	this->actions["networksetcert"]=&OpiBackendServer::DoNetworkSetCert;
 	this->actions["networkcheckcert"]=&OpiBackendServer::DoNetworkCheckCert;
 
 	this->actions["setnetworksettings"]=&OpiBackendServer::DoNetworkSetSettings;
@@ -2168,21 +2168,22 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	string oldopiname;
-	string hostname;
-	string domain;
-	string olddomain;
-	string fqdn;
-	bool enableDns;
+	string oldcerttype;
 
-	oldopiname = idmgr.GetHostname();
-	olddomain = idmgr.GetDomain();
+	string oldopiname = idmgr.GetHostname();
+	string olddomain = idmgr.GetDomain();
 
-	hostname = cmd["hostname"].asString();
-	domain = cmd["domain"].asString();
-	enableDns = cmd["enabledns"].asBool();
+	string hostname = cmd["hostname"].asString();
+	string domain = cmd["domain"].asString();
+	bool   enableDns = cmd["dnsenabled"].asBool();
+	string certtype = cmd["CertType"].asString();
+	string certificate = cmd["CustomCertVal"].asString();
+	string key = cmd["CustomKeyVal"].asString();
 
-	fqdn = hostname+"."+domain;
+	if (SCFG.HasKey("webcertificate","backend"))
+	{
+		oldcerttype = SCFG.GetKeyAsString("webcertificate","backend");
+	}
 
 	bool managedDomain = idmgr.DnsDomainAvailable(domain);
 	/* If the domain is in the list of available domains, check with provider.
@@ -2190,6 +2191,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		*/
 	if ( managedDomain )
 	{
+		logg << Logger::Debug << "Domain is 'managed'"<<lend;
 		// if the domain is in the available domains, check that the full FQDN is available
 		if ( ! idmgr.DnsNameAvailable(hostname,domain) )
 		{
@@ -2207,27 +2209,33 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		}
 
 	} else {
+		logg << Logger::Debug << "Domain '"<< domain << "' is not 'managed', disable DNS"<<lend;
 		idmgr.DisableDNS();
 	}
 
-	if( (hostname == oldopiname) && (olddomain == domain))
-	{
-		// no need to do any updates on server side
-		logg << Logger::Debug << "No name update"<<lend;
+	bool updatename;
+	if( (hostname == oldopiname) && (olddomain == domain) ) {
+		// if we use a custom cert, always generate make sure the cert is written
+		updatename = false;
+		if ( (oldcerttype == certtype) && ( key == "" ) )
+		{
+			// no need to do any updates on server side
+			logg << Logger::Debug << "No name update"<<lend;
 
-		this->SendOK(client, cmd);
-		return;
+			this->SendOK(client, cmd);
+			return;
+		}
+	} else {
+		logg << Logger::Debug << "Update sysconfig with new name"<<lend;
+		// Update sysconfig with new name
+		updatename = true;
+		if ( !idmgr.SetFqdn(hostname,domain) )
+		{
+			this->SendErrorMessage( client, cmd, 500, "Failed to set hostname/domain config parameters");
+			logg << Logger::Error << "Failed to set hostname/domain config parameters" << lend;
+			return;
+		}
 	}
-
-	logg << Logger::Debug << "Update sysconfig with new name"<<lend;
-	// Update sysconfig with new name
-	if ( !idmgr.SetFqdn(hostname,domain) )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to set hostname/domain config parameters");
-		logg << Logger::Error << "Failed to set hostname/domain config parameters" << lend;
-		return;
-	}
-
 
 	if ( managedDomain ) {
 		/* Try update DNS, i.e. reserve name */
@@ -2239,204 +2247,23 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		}
 	}
 
+
 	/* Generate certificates */
+	/* Certificate backend will not do anything for custom certs, just immediately terminate */
 	logg << Logger::Info << "Generate certificates" << lend;
-	if ( !idmgr.CreateCertificate() )
+	if ( !idmgr.CreateCertificate(updatename,certtype) )
 	{
 		this->SendErrorMessage( client, cmd, 400, "Failed to generate certificate(s)");
 		return;
 	}
 
-	/* Update postfix with new "hostname" */
-	/*
-		logg << Logger::Debug << "Update mail config"<<lend;
-		File::Write("/etc/mailname", fqdn, 0644);
-
-		MailConfig mc;
-		try
-		{
-			mc.ReadConfig();
-			mc.ChangeDomain(oldopiname+"."+domain,fqdn);
-			mc.WriteConfig();
-		}
-		catch (std::runtime_error& err)
-		{
-			string errmsg="Failed to update domain in MailConfig";
-			response["errmsg"]=errmsg;
-			logg << Logger::Error << "Caught exception: " << err.what() <<lend;
-			Notify::NewMessage Msg(LOG_ERR,errmsg);
-			Msg.Send();
-		}
-		*/
-
-	this->SendOK(client, cmd, response);
-
-	/* Restart related services */
-	/* Do this here since we do not want to restart nginx with a new certificate before we
-		 * send the response to this call. */
-	// update_postfix();
-	ServiceHelper::Reload("nginx");
-	idmgr.CleanUp();
-
-}
-
-void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
-
-    ScopedLog l("Get Domains!");
-
-
-    if( ! this->CheckLoggedIn(client,cmd) )
-    {
-        return;
-    }
-
-    try
-    {
-        SysConfig sysconfig;
-        Json::Value res(Json::objectValue);
-        Json::Value d(Json::arrayValue);
-        list<string> domains = sysconfig.GetKeyAsStringList("dns","availabledomains");
-
-        for(const auto& val: domains)
-        {
-            d.append(val);
-        }
-        res["availabledomains"] = d;
-
-        this->SendOK(client, cmd, res);
-    }
-    catch (std::runtime_error& e)
-    {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
-        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
-        return;
-    }
-}
-
-
-/*
-void OpiBackendServer::DoNetworkDisableDNS(UnixStreamClientSocketPtr &client, Json::Value &cmd)
-{
-	ScopedLog l("Disable OPI DNS");
-    SysConfig sysconfig(true);
-	if( ! this->CheckLoggedIn(client,cmd) )
+	if (certtype == "CUSTOMCERT")
 	{
-		return;
-	}
 
-    try
-    {
-        sysconfig.PutKey("dns","enabled",false);
-    }
-    catch (std::runtime_error& e)
-    {
-        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-        logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-        return;
-    }
-
-	this->SendOK(client, cmd);
-}
-*/
-void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
-{
-	ScopedLog l("Get Webserver Certificates");
-	Json::Value cfg;
-	string CustomCertFile,CustomKeyFile;
-    SysConfig sysconfig;
-
-
-	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
-	{
-		return;
-	}
-
-    cfg["CertType"] = sysconfig.GetKeyAsString("webcertificate","backend");
-    if (sysconfig.HasKey("webcertificate","customcert"))
-    {
-        CustomCertFile = sysconfig.GetKeyAsString("webcertificate","customcert");
-    }
-
-	if ( File::FileExists( CustomCertFile ) )
-	{
-		cfg["CustomCertVal"] = File::GetContentAsString(CustomCertFile, true);
-	}
-	else
-	{
-		cfg["CustomCertVal"] = "";
-
-	}
-
-	if ( cfg["CertType"] == "LETSENCRYPT" )
-	{
-        string webcert = sysconfig.GetKeyAsString("webcertificate","activecert");
-		// test to see if signed cert is used, if it could not be generated there is a fallback to default self singed certificate
-        logg << Logger::Debug << "Testing for used certificate."<<lend;
-	    char buff[PATH_MAX];
-	    string certpath;
-        ssize_t len = ::readlink(webcert.c_str(), buff, sizeof(buff)-1);
-	    if (len != -1)
-	    {
-	    	buff[len] = '\0';
-	    	certpath=std::string(buff);
-            logg << Logger::Debug << "CertPath used:" << certpath <<lend;
-
-            if ( File::GetFileName(File::RealPath(certpath)) == File::GetFileName(sysconfig.GetKeyAsString("webcertificate","defaultcert")) )
-	    	{
-	    		cfg["CertStatus"] = "ERROR";
-	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
-	    	}
-	    }
-	}
-
-
-	this->SendOK( client, cmd, cfg);
-}
-
-void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
-{
-	ScopedLog l("Set Webserver Certificates");
-
-	string CustomCertFile,CustomKeyFile;
-    Json::Value response;
-
-	string certtype = cmd["CertType"].asString();
-	string certificate = cmd["CustomCertVal"].asString();
-	string key = cmd["CustomKeyVal"].asString();
-    SysConfig sysconfig(true);
-	int linkval;
-
-	if (certtype == "LETSENCRYPT") 
-	{
-		// Actual certificate generation and updates handled by kinguard-certhandler triggered by cron
-		// if a change in hostname / domain is done, certificate generation is triggered by the "SetOpiName"
-		// This means that it will take a while to get the cert if only the cert option is changed,
-		// but there will be no race condition with SetOpiName since this function is also always triggered from
-		// the UI at _same_ time as SetOpiName.
-        try
-        {
-            sysconfig.PutKey("webcertificate","backend",certtype);
-        }
-        catch (std::runtime_error& e)
-        {
-            this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-            logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-            return;
-        }
-
-        this->SendOK(client, cmd, response);
-	}
-	else if (certtype == "CUSTOMCERT")
-	{
-		if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
-		{
-			this->SendErrorMessage( client, cmd, 404, "Unauthorized");
-			return;
-		}
-
+		logg << Logger::Debug << "Supplied key: '" << key << "'" << lend;
 		bool valid_cert = this->verifyCertificate(certificate,"cert");
 		bool valid_key =  this->verifyCertificate(key,"key");
-		
+
 		if ( ! (  valid_cert && valid_key ) )
 		{
 			logg << Logger::Debug << "Combination of certs not valid" << lend;
@@ -2458,104 +2285,111 @@ void OpiBackendServer::DoNetworkSetCert(UnixStreamClientSocketPtr &client, Json:
 		// INPUT VALIDATED, WRITE FILES
 		logg << Logger::Debug << "Certificates seem to be Valid" << lend;
 
-        string CustomCertPath = "/etc/kinguard/usercert/";
-        string webcert = sysconfig.GetKeyAsString("webcertificate","activecert");
-        string webkey = sysconfig.GetKeyAsString("webcertificate","activekey");
-        if (sysconfig.HasKey("webcertificate","customkey") && sysconfig.HasKey("webcertificate","customcert") )
-        {
-            CustomKeyFile = sysconfig.GetKeyAsString("webcertificate","customkey");
-            CustomCertFile = sysconfig.GetKeyAsString("webcertificate","customcert");
-            CustomCertPath = File::GetPath(CustomCertFile);
-        }
-
-
-        string keyFilename = this->getTmpFile(CustomCertPath,".key");
-        string certFilename = this->getTmpFile(CustomCertPath,".cert");
-
-		if ( key.length() )
-		{
-			if (! this->writeCertificate(key,keyFilename,CustomKeyFile) )
-			{
-				this->SendErrorMessage( client, cmd, 500, "Failed to write key to file");
-				return;
-			}
-
-		} else {
-			// using existing key on file, since no key is posted we have validated the key 
-			// already on file otherwise we can not come here.
-			logg << Logger::Debug << "Using Private Key from file" << lend;
-			keyFilename = CustomKeyFile;
-		}
-		if (! this->writeCertificate(certificate,certFilename,CustomCertFile) )
-		{
-			this->SendErrorMessage( client, cmd, 500, "Failed to write certificate to file");
-			return;
-		}
-
-		// create a backup copy of the cert symlinks nginx uses
-		string curr_key,curr_cert;
-        curr_key = File::RealPath(webkey);
-        curr_cert = File::RealPath(webcert);
-
-        File::Delete(webcert);
-        File::Delete(webkey);
-
-        linkval=symlink(certFilename.c_str(),webcert.c_str());
-        linkval=symlink(keyFilename.c_str(),webkey.c_str());
-
-		// new links should now be in place, let nginx test the config
-		int retval;
-		string Message;
-
-		tie(retval,Message)=Process::Exec( "nginx -t" );
+		string retmsg;
+		bool retval;
+		tie(retval,retmsg) = idmgr.WriteCustomCertificate(key,certificate);
 		if ( retval )
 		{
-            try
-            {
-                sysconfig.PutKey("webcertificate","customkey",keyFilename);
-                sysconfig.PutKey("webcertificate","customcert",certFilename);
-                sysconfig.PutKey("webcertificate","backend",certtype);
-            }
-            catch (std::runtime_error& e)
-            {
-                this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
-                logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-                return;
-            }
-
-            // send ok message prior to ngix restart
-            this->SendOK( client, cmd);
-
-			// update config file
-
+			this->SendOK( client, cmd);
 			// nginx config is correct, restart webserver
-            logg << Logger::Debug << "Reloading Nginx config" << lend;
-            ServiceHelper::Reload("nginx");
-            return;
+			logg << Logger::Debug << "Reloading Nginx config" << lend;
+			ServiceHelper::Reload("nginx");
 		}
 		else
 		{
-			// nginx config test failed, restore old links
-			logg << Logger::Debug << "Nginx config test failed" << lend;
-            File::Delete(webcert);
-            File::Delete(webkey);
-
-            linkval=symlink(curr_cert.c_str(),webcert.c_str());
-            linkval=symlink(curr_key.c_str(),webkey.c_str());
-
-			this->SendErrorMessage( client, cmd, 500, "Webserver config test failed with new certificates");
-			return;
-
+			this->SendErrorMessage( client, cmd, 500, retmsg);
 		}
-		this->SendOK( client, cmd);
+
+
 	}
-	else 
+
+	this->SendOK(client, cmd, response);
+
+	idmgr.CleanUp();
+
+}
+
+void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+
+    ScopedLog l("Get Domains!");
+	KGP::IdentityManager& idmgr = KGP::IdentityManager::Instance();
+
+    if( ! this->CheckLoggedIn(client,cmd) )
+    {
+        return;
+    }
+
+	Json::Value res(Json::objectValue);
+	Json::Value d(Json::arrayValue);
+	list<string> domains = idmgr.DnsAvailableDomains();
+
+	for(const auto& val: domains)
 	{
-		this->SendErrorMessage( client, cmd, 500, "Unable to handle certificate requests");
+		d.append(val);
+	}
+	res["availabledomains"] = d;
+
+	this->SendOK(client, cmd, res);
+}
+
+void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Get Webserver Certificates");
+	Json::Value cfg;
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
+	{
 		return;
 	}
 
 
+	if (SCFG.HasKey("webcertificate","backend") )
+	{
+		cfg["CertType"] = SCFG.GetKeyAsString("webcertificate","backend");
+	}
+	else
+	{
+		this->SendErrorMessage( client, cmd, 400, "Failed to read certificate type from sysconfig");
+	}
+
+
+	if ( cfg["CertType"] == "CUSTOMCERT" )
+	{
+		try
+		{
+			cfg["CustomCertVal"] = File::GetContentAsString(SCFG.GetKeyAsString("webcertificate","activecert"), true);
+		}
+		catch (runtime_error& err)
+		{
+			logg << Logger::Warning << "Failed to read certificate: " << err.what() <<lend;
+			cfg["CustomCertVal"] = "";
+		}
+	}
+
+	if ( cfg["CertType"] == "LETSENCRYPT" )
+	{
+		string webcert = SCFG.GetKeyAsString("webcertificate","activecert");
+		// test to see if signed cert is used, if it could not be generated there is a fallback to default self singed certificate
+        logg << Logger::Debug << "Testing for used certificate."<<lend;
+	    char buff[PATH_MAX];
+	    string certpath;
+        ssize_t len = ::readlink(webcert.c_str(), buff, sizeof(buff)-1);
+	    if (len != -1)
+	    {
+	    	buff[len] = '\0';
+	    	certpath=std::string(buff);
+            logg << Logger::Debug << "CertPath used:" << certpath <<lend;
+
+			if ( File::GetFileName(File::RealPath(certpath)) == File::GetFileName(SCFG.GetKeyAsString("webcertificate","defaultcert")) )
+	    	{
+	    		cfg["CertStatus"] = "ERROR";
+	    		logg << Logger::Debug << "Lets Encrypt cert asked for, but not used."<<lend;		      
+	    	}
+	    }
+	}
+
+
+	this->SendOK( client, cmd, cfg);
 }
 
 void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
@@ -2990,45 +2824,25 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	}
 
 	SysConfig sysconfig(true);
+	KGP::IdentityManager& idmgr = KGP::IdentityManager::Instance();
+
 	if ( enabled )
 	{
 		// Try to login and set system keys
 		bool status;
 		string token;
 
-		tie(status,token) = this->UploadKeys(unitid,mpwd);
+		tie(status,token) = idmgr.UploadKeys(unitid,mpwd);
 
-		if (! status )
-		{
-			logg << Logger::Error<< "Failed to login to backend" <<lend;
-			this->SendErrorMessage(client, cmd, 500, "Failed to login to backend");
+		if (! status) {
+			logg << Logger::Error<< "Failed to upload keys" <<lend;
+			this->SendErrorMessage(client, cmd, 500, "Failed to upload keys");
 			return;
-		}
-		else
-		{
-			logg << Logger::Error<< "Received token from server: " << token <<lend;
-
-			// Try to upload dns-key
-			stringstream pk;
-			for( auto row: File::GetContent(SCFG.GetKeyAsString("dns","dnspubkey")) )
-			{
-				pk << row << "\n";
-			}
-			DnsServer dns;
-			string pubkey = Base64Encode( pk.str() );
-			if(! dns.RegisterPublicKey(unitid, pubkey, token ))
-			{
-				logg << Logger::Error<< "Failed to upload DNS key" <<lend;
-				this->SendErrorMessage(client, cmd, 500, "Failed to upload DNS key");
-				return;
-			}
-
 		}
 		try
 		{
 			sysconfig.PutKey("hostinfo","unitid",unitid);
-			sysconfig.PutKey("dns","enabled",true);
-			if ( sysconfig.HasKey("hostinfo","unitidbak") )
+			if (sysconfig.HasKey("hostinfo","unitidbak"))
 			{
 				sysconfig.RemoveKey("hostinfo","unitidbak");
 			}
@@ -3069,10 +2883,6 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		}
 	}
 	this->SendOK(client, cmd, ret);
-	if ( ! enabled )
-	{
-	}
-
 
 }
 
@@ -3436,11 +3246,11 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 
 	if ( type == "key" && ! cert.length())
 	{
+		logg << Logger::Debug << "No private key supplied, reading from file" << lend;
         // no key was passed in the post, try to use existing one on file
         try
         {
-            SysConfig sysconfig;
-            CustomKeyFile = sysconfig.GetKeyAsString("webcertificate","customkey");
+			CustomKeyFile = SCFG.GetKeyAsString("webcertificate","activekey");
         }
         catch (std::runtime_error& e)
         {
@@ -3448,8 +3258,9 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
             return false;
         }
 
-		if( ! File::FileExists( CustomKeyFile ) )
+		if( ! File::FileExists( File::RealPath(CustomKeyFile) ) )
 		{
+			logg << Logger::Debug << "File '" << CustomKeyFile <<"' does not seem to exist" << lend;
 			return false;
 		}
 		else
@@ -3463,6 +3274,7 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 	{
 		if ( type == "key" )
 		{
+			logg << Logger::Debug << "Checking supplied key" << lend;
 			File::Write( tmpFile, cert, 0600);		
 			opensslscript ="openssl rsa -check -noout -in " + tmpFile;
 			tie(retval,Message)=Process::Exec( opensslscript );
@@ -3473,6 +3285,7 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 		}
 		else if ( type == "cert" )
 		{
+			logg << Logger::Debug << "Checking supplied cert" << lend;
 			// check for multiple certs
 
 			std::string delimiter = "-----END CERTIFICATE-----";
@@ -3506,246 +3319,13 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 
 	return retval;
 }
-
-
-bool OpiBackendServer::writeCertificate(string cert, string &newFile, string oldFile)
-{
-	std::size_t fileHash=0;
-	std::size_t certHash=0;
-	string filepath = File::GetPath(newFile);
-
-	if ( File::FileExists(oldFile) )
-	{
-		fileHash = std::hash<std::string>{}(File::GetContentAsString(oldFile, true));
-	}
-	certHash = std::hash<std::string>{}(cert);
-
-	// check if the files are the same
-	if (fileHash == certHash ) 
-	{
-		logg << Logger::Debug << "Received data is the same as already on file." << lend;
-		newFile = oldFile;
-	}
-	else
-	{
-	 	// write Private Key file
-	 	if (! File::DirExists( filepath) )
-	 	{
-	 		File::MkPath(filepath, 0755);
-	 	}
-	 	File::Write( newFile,cert,600);
-	}
-	return true;
-}
-
 string OpiBackendServer::getTmpFile(string path,string suffix)
 {
 	string filename;
 	filename = path+String::UUID()+suffix;
-
 	while( File::FileExists( filename ))
 	{
-		filename = path+String::UUID()+suffix;		
+		filename = path+String::UUID()+suffix;
 	}
 	return filename;
-}
-
-bool OpiBackendServer::RegisterKeys() {
-	logg << Logger::Debug << "Register keys"<<lend;
-	string sysauthkey = SCFG.GetKeyAsString("hostinfo","sysauthkey");
-	string syspubkey = SCFG.GetKeyAsString("hostinfo","syspubkey");
-	string dnsauthkey = SCFG.GetKeyAsString("dns","dnsauthkey");
-	string dnspubkey = SCFG.GetKeyAsString("dns","dnspubkey");
-	try{
-		Secop s;
-
-		s.SockAuth();
-		list<map<string,string>> ids;
-
-		try
-		{
-			ids = s.AppGetIdentifiers("op-backend");
-		}
-		catch( __attribute__((unused)) runtime_error& err )
-		{
-			// Do nothing, appid is missing but thats ok.
-		}
-
-		if( ids.size() == 0 )
-		{
-			logg << Logger::Debug << "No keys in secop" << lend;
-			s.AppAddID("op-backend");
-
-			RSAWrapper ob;
-			ob.GenerateKeys();
-
-			// Write to disk
-			string priv_path = File::GetPath( sysauthkey );
-			if( ! File::DirExists( priv_path ) )
-			{
-				File::MkPath( priv_path, 0755);
-			}
-
-			string pub_path = File::GetPath( syspubkey );
-			if( ! File::DirExists( pub_path ) )
-			{
-				File::MkPath( pub_path, 0755);
-			}
-
-
-			// Write to secop
-			map<string,string> data;
-
-			data["type"] = "backendkeys";
-			data["pubkey"] = Base64Encode(ob.GetPubKeyAsDER());
-			data["privkey"] = Base64Encode(ob.GetPrivKeyAsDER());
-			s.AppAddIdentifier("op-backend", data);
-
-			logg << Logger::Debug << "Move (if existing) old private key"<<lend;
-			if ( File::FileExists(sysauthkey)) {
-				string oldsysauthkey = File::GetContentAsString( sysauthkey,true );
-				File::Write(sysauthkey+".old",oldsysauthkey, 0600 );
-			}
-			if ( File::FileExists(syspubkey)) {
-				string oldsyspubkey = File::GetContentAsString(syspubkey,true );
-				File::Write(syspubkey+".old",oldsyspubkey, 0644 );
-			}
-
-			File::Write(sysauthkey, ob.PrivKeyAsPEM(), 0600 );
-			File::Write(syspubkey, ob.PubKeyAsPEM(), 0644 );
-		}
-
-
-		string priv_path = File::GetPath( dnsauthkey );
-		if( ! File::DirExists( priv_path ) )
-		{
-			File::MkPath( priv_path, 0755);
-		}
-
-		string pub_path = File::GetPath( dnspubkey );
-		if( ! File::DirExists( pub_path ) )
-		{
-			File::MkPath( pub_path, 0755);
-		}
-
-		if( ! File::FileExists( dnsauthkey) || ! File::FileExists( dnspubkey ) )
-		{
-			RSAWrapper dns;
-			dns.GenerateKeys();
-
-			if ( File::FileExists(sysauthkey)) {
-				string olddnsauthkey = File::GetContentAsString( dnsauthkey,true );
-				File::Write(dnsauthkey+".old",olddnsauthkey, 0600 );
-			}
-			if ( File::FileExists(syspubkey)) {
-				string olddnspubkey = File::GetContentAsString(dnspubkey,true );
-				File::Write(dnspubkey+".old",olddnspubkey, 0644 );
-			}
-
-			File::Write(dnsauthkey, dns.PrivKeyAsPEM(), 0600 );
-			File::Write(dnspubkey, dns.PubKeyAsPEM(), 0644 );
-		}
-
-	}
-	catch( runtime_error& err)
-	{
-		logg << Logger::Notice << "Failed to register keys " << err.what() << lend;
-		return false;
-	}
-	return true;
-}
-
-tuple<bool,string> OpiBackendServer::UploadKeys(string unitid,string mpwd)
-{
-	AuthServer s(unitid);
-	int resultcode;
-	string token;
-	Json::Value ret;
-
-	tie(resultcode, ret) = s.Login();
-	logg << Logger::Debug << "Login resultcode from server: " << resultcode <<lend;
-
-	if( resultcode != 200 && resultcode != 403 && resultcode != 503)
-	{
-		logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
-		return make_tuple(false,"");
-	}
-	if( resultcode == 503 )
-	{
-		// keys are missing in secop, register new keys in secop.
-		if ( ! this->RegisterKeys() )
-		{
-			logg << Logger::Error << "Failed to register keys"<< resultcode <<lend;
-			return make_tuple(false,"");
-		}
-		// try to login again
-		tie(resultcode, ret) = s.Login();
-		logg << Logger::Debug << "Retry Login resultcode from server: " << resultcode <<lend;
-		if( resultcode != 200 && resultcode != 403 )
-		{
-			logg << Logger::Error << "Unexpected reply from server "<< resultcode <<lend;
-			return make_tuple(false,"");
-		}
-	}
-
-	if( resultcode == 403  || resultcode == 503 )
-	{
-		logg << Logger::Debug << "Send Secret"<<lend;
-
-		if( ! ret.isMember("reply") || ! ret["reply"].isMember("challange")  )
-		{
-			logg << Logger::Error << "Missing argument from server "<< resultcode <<lend;
-			return make_tuple(false,"");
-		}
-
-		// Got new challenge to encrypt with master
-		string challenge = ret["reply"]["challange"].asString();
-
-		RSAWrapperPtr c = AuthServer::GetKeysFromSecop();
-
-		SecVector<byte> key = PBKDF2(SecString(mpwd.c_str(), mpwd.size() ), 32 );
-		AESWrapper aes( key );
-
-		string cryptchal = Base64Encode( aes.Encrypt( challenge ) );
-
-		tie(resultcode, ret) = s.SendSecret(cryptchal, Base64Encode(c->PubKeyAsPEM()) );
-		if( resultcode != 200 )
-		{
-			if( resultcode == 403)
-			{
-				logg << Logger::Debug << "Access denied to OP servers"<<lend;
-				return make_tuple(false,"");
-			}
-			else
-			{
-				logg << Logger::Debug << "Failed to communicate with OP server"<<lend;
-				return make_tuple(false,"");
-			}
-		}
-
-		if( ret.isMember("token") && ret["token"].isString() )
-		{
-			token = ret["token"].asString();
-		}
-		else
-		{
-			logg << Logger::Error << "Missing argument in reply"<<lend;
-			return make_tuple(false,"");
-		}
-
-	}
-	else
-	{
-		if( ret.isMember("token") && ret["token"].isString() )
-		{
-			token = ret["token"].asString();
-		}
-		else
-		{
-			logg << Logger::Error << "Missing argument in reply"<<lend;
-			return make_tuple(false,"");
-		}
-	}
-
-	return make_tuple(true,token);
 }
