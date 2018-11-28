@@ -22,13 +22,18 @@
 #include <libopi/SysConfig.h>
 #include <libopi/BackupHelper.h>
 
+#include <libopi/JsonHelper.h>
+
 #include <kinguard/IdentityManager.h>
 
 #include <algorithm>
 #include <unistd.h>
 #include <uuid/uuid.h>
 #include <regex>
+#include <linux/limits.h>
 
+using namespace OPI;
+using namespace OPI::JsonHelper;
 using namespace KGP;
 
 
@@ -53,41 +58,31 @@ using namespace KGP;
 #define CHK_RCV 0x00004000  // Check receive
 #define CHK_DEM 0x00008000  // Check default email
 
-enum ArgCheckType{
-	STRING,
-	INT,
-	BOOL
-};
+#define CHK_ORIGID	0x00010000  // Check original identity
+#define CHK_ORIGHST 0x00020000  // Check original hostname
 
-typedef struct ArgCheckStruct
-{
-	int				check;
-	const char*		member;
-	ArgCheckType	type;
-}ArgCheckLine;
-
-static vector<ArgCheckLine> argchecks(
+static vector<TypeChecker::Check> argchecks(
 	{
-			{ CHK_USR, "username",		ArgCheckType::STRING },
-			{ CHK_PWD, "password",		ArgCheckType::STRING },
-			{ CHK_NPW, "newpassword",	ArgCheckType::STRING },
-			{ CHK_DSP, "displayname",	ArgCheckType::STRING },
-			{ CHK_DEM, "defaultemail",	ArgCheckType::STRING },
-			{ CHK_DMN, "domain",		ArgCheckType::STRING },
-			{ CHK_GRP, "group",			ArgCheckType::STRING },
-			{ CHK_ADR, "address",		ArgCheckType::STRING },
-			{ CHK_HST, "hostname",		ArgCheckType::STRING },
-			{ CHK_IDN, "identity",		ArgCheckType::STRING },
-			{ CHK_PRT, "port",			ArgCheckType::STRING },
-			{ CHK_EML, "email",			ArgCheckType::STRING },
-			{ CHK_SSL, "ssl",			ArgCheckType::STRING },
-			{ CHK_TYP, "type",			ArgCheckType::STRING },
-			{ CHK_SND, "send",			ArgCheckType::BOOL },
-			{ CHK_RCV, "receive",		ArgCheckType::BOOL },
-	});
+			{ CHK_USR, "username",		TypeChecker::Type::STRING },
+			{ CHK_PWD, "password",		TypeChecker::STRING },
+			{ CHK_NPW, "newpassword",	TypeChecker::STRING },
+			{ CHK_DSP, "displayname",	TypeChecker::STRING },
+			{ CHK_DEM, "defaultemail",	TypeChecker::STRING },
+			{ CHK_DMN, "domain",		TypeChecker::STRING },
+			{ CHK_GRP, "group",			TypeChecker::STRING },
+			{ CHK_ADR, "address",		TypeChecker::STRING },
+			{ CHK_HST, "hostname",		TypeChecker::STRING },
+			{ CHK_IDN, "identity",		TypeChecker::STRING },
+			{ CHK_PRT, "port",			TypeChecker::STRING },
+			{ CHK_EML, "email",			TypeChecker::STRING },
+			{ CHK_SSL, "ssl",			TypeChecker::STRING },
+			{ CHK_TYP, "type",			TypeChecker::STRING },
+			{ CHK_SND, "send",			TypeChecker::BOOL },
+			{ CHK_RCV, "receive",		TypeChecker::BOOL },
 
-// Forwards
-static bool CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type);
+			{ CHK_ORIGID, "origidentity",			TypeChecker::STRING },
+			{ CHK_ORIGID, "orighostname",			TypeChecker::STRING },
+	});
 
 // Utility function forwards
 static bool update_postfix();
@@ -95,9 +90,9 @@ static void postfix_fixpaths();
 static bool addusertomailadmin( const string& user );
 static bool removeuserfrommailadmin( const string& user );
 
-
 OpiBackendServer::OpiBackendServer(const string &socketpath):
-	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0)
+	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0),
+	typechecker(argchecks, OpiBackendServer::typecheckcallback)
 {
 	this->actions["login"]=&OpiBackendServer::DoLogin;
 	this->actions["authenticate"]=&OpiBackendServer::DoAuthenticate;
@@ -177,7 +172,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	postfix_fixpaths();
 
 	// Initialize time for last reap
-	this->lastreap = time(NULL);
+	this->lastreap = time(nullptr);
 }
 
 #define BUFSIZE (64*1024)
@@ -1934,21 +1929,11 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	if( ! this->CheckArguments(client, CHK_HST | CHK_IDN | CHK_PWD | CHK_USR | CHK_EML | CHK_SSL, cmd) )
+	if( ! this->CheckArguments(client,
+							   CHK_HST | CHK_IDN | CHK_PWD | CHK_USR | CHK_EML | CHK_SSL |
+							   CHK_ORIGHST | CHK_ORIGID
+							   , cmd) )
 	{
-		return;
-	}
-
-	// Non common arguments check
-	if( ! CheckArgument( cmd, "origidentity",ArgCheckType::STRING) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
-		return;
-	}
-
-	if( ! CheckArgument( cmd, "orighostname",ArgCheckType::STRING) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
 		return;
 	}
 
@@ -3220,40 +3205,18 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 	this->SendReply(client, ret);
 }
 
-static inline bool
-CheckArgument(const Json::Value& cmd, const string& member, ArgCheckType type)
+void OpiBackendServer::typecheckcallback(const string& msg, void* data)
 {
-	if( cmd.isNull() )
-	{
-		return false;
-	}
-
-	switch( type )
-	{
-	case ArgCheckType::STRING:
-		return cmd.isMember( member ) && cmd[member].isString();
-		break;
-	case ArgCheckType::INT:
-		return cmd.isMember( member ) && cmd[member].isInt();
-		break;
-	case ArgCheckType::BOOL:
-		return cmd.isMember( member ) && cmd[member].isBool();
-		break;
-	default:
-		return false;
-	}
+	(void) data;
+	logg << Logger::Debug << "Typecheck failed: " << msg <<lend;
 }
 
 bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd)
 {
-	for( auto check: argchecks )
+	if( ! this->typechecker.Verify(what, cmd) )
 	{
-		if( what & check.check && ! CheckArgument( cmd, check.member, check.type) )
-		{
-			logg << Logger::Debug << "Failed to verify argument "<<check.member<<lend;
-			this->SendErrorMessage(client, cmd, 400, "Missing argument");
-			return false;
-		}
+		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		return false;
 	}
 	return true;
 }

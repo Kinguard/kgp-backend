@@ -12,6 +12,7 @@
 #include <libutils/NetServer.h>
 
 #include <libopi/Secop.h>
+#include <libopi/JsonHelper.h>
 
 #include <libkgpnotify/kgpNotify.h>
 
@@ -143,6 +144,11 @@ private:
 	map<string,Action> actions;
 
 	Clients clients;
+
+	// Argumnen checking functionality
+	string typecheckerror;
+	static void typecheckcallback(const string& msg, void* data);
+	JsonHelper::TypeChecker typechecker;
 
 	Json::FastWriter writer;
 	Json::Reader reader;
