@@ -25,6 +25,8 @@
 #include <libopi/JsonHelper.h>
 
 #include <kinguard/IdentityManager.h>
+#include <kinguard/UserManager.h>
+#include <kinguard/MailManager.h>
 
 #include <algorithm>
 #include <unistd.h>
@@ -85,7 +87,7 @@ static vector<TypeChecker::Check> argchecks(
 	});
 
 // Utility function forwards
-static bool update_postfix();
+//static bool update_postfix();
 static void postfix_fixpaths();
 static bool addusertomailadmin( const string& user );
 static bool removeuserfrommailadmin( const string& user );
@@ -354,51 +356,15 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	string display =	cmd["displayname"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
-    SysConfig sysconfig;
 
-	if( ! secop->CreateUser( user, pass,display ) )
+
+	UserManagerPtr umgr = UserManager::Instance(secop);
+
+	if( ! umgr->AddUser(user,pass, display, false) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Failed");
 		return;
 	}
-
-	string opiname;
-	string domain;
-	try
-	{
-		opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
-		domain = sysconfig.GetKeyAsString("hostinfo","domain");
-	}
-	catch (std::runtime_error& e)
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
-		logg << Logger::Error << "Failed to set sysconfig" << e.what() << lend;
-		return;
-	}
-
-	// set default email in secop
-	string defaultemail = user+"@"+opiname+"."+domain;
-	logg << Logger::Debug << "Setting defult email in secop to: " << defaultemail << lend;
-	if( ! secop->AddAttribute(user, "defaultemail", defaultemail) )
-	{
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
-		return;
-	}
-
-	// Add user to local mail
-    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
-    MailMapFile mmf( localmail );
-	mmf.ReadConfig();
-	mmf.SetAddress("localdomain", user, user);
-	mmf.WriteConfig();
-
-	// Add user to opi-domain
-	MailConfig mc;
-	mc.ReadConfig();
-    mc.SetAddress(opiname+"."+domain,user,user);
-	mc.WriteConfig();
-
-	update_postfix();
 
 	this->SendOK(client, cmd);
 }
@@ -430,88 +396,14 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	SecopPtr secop = wc->Secop();
+	UserManagerPtr umgr = UserManager::Instance( wc->Secop() );
 
-	vector<string> groups = secop->GetUserGroups( user );
-	bool wasadmin = find( groups.begin(), groups.end(), "admin") != groups.end();
-
-    if( ! secop->RemoveUser( user ) )
+	if( ! umgr->DeleteUser(user) )
 	{
+		logg << Logger::Notice << "Failed to remove user: "<< umgr->StrError()<<lend;
 		this->SendErrorMessage(client, cmd, 400, "Failed");
 		return;
 	}
-
-    if( wasadmin )
-	{
-		removeuserfrommailadmin( user );
-
-		// Possibly remove user from OC internal user-db
-		if( File::FileExists( OC_CLEAN_SCRIPT ) )
-		{
-			Process::Exec( OC_CLEAN_SCRIPT );
-		}
-		else
-		{
-			logg << Logger::Error << "Missing OC clean script ["<< OC_CLEAN_SCRIPT << "]" << lend;
-		}
-	}
-
-    // Remove user from local mail
-    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
-    MailMapFile mmf( localmail );
-	mmf.ReadConfig();
-	mmf.DeleteAddress("localdomain", user);
-	mmf.WriteConfig();
-
-    // Remove user from opi-domain
-    string opiname;
-    string domain;
-    try {
-        opiname = sysconfig.GetKeyAsString("hostinfo","hostname");
-        domain = sysconfig.GetKeyAsString("hostinfo","domain");
-    }
-    catch (std::runtime_error& e)
-    {
-        logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
-        this->SendErrorMessage(client, cmd, 400, "Failed");
-        return;
-    }
-
-    MailConfig mc;
-    mc.ReadConfig();
-    try {
-        mc.DeleteAddress(opiname+"."+domain,user);
-    }
-    catch (std::runtime_error& e)
-    {
-        logg << Logger::Error << "Failed to delete user" << e.what() << lend;
-        this->SendErrorMessage(client, cmd, 400, "Failed");
-        return;
-    }
-    mc.WriteConfig();
-    update_postfix();
-
-    // delete the users files and mail
-    logg << Logger::Debug << "Deleting files for user: " << user << lend;
-    try {
-        string storage = sysconfig.GetKeyAsString("filesystem","storagemount");
-        string dir = storage + "/mail/data/" + user;
-        if( File::DirExists(dir.c_str()))
-        {
-            Process::Exec("rm -rf "+ dir);
-        }
-        dir = storage + "/nextcloud/data/" + user;
-        if( File::DirExists(dir.c_str()))
-        {
-            Process::Exec("rm -rf "+ dir);
-        }
-    }
-    catch (std::runtime_error& e)
-    {
-        logg << Logger::Error << "Failed to delete user files" << e.what() << lend;
-        this->SendErrorMessage(client, cmd, 400, "Failed");
-        return;
-    }
 
 	this->SendOK(client, cmd);
 }
@@ -535,15 +427,18 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
-	vector<string> users  = secop->GetUsers();
+	UserManagerPtr umgr = UserManager::Instance( secop );
 
-	if( std::find(users.begin(), users.end(), user) == users.end() )
+	KGP::UserPtr usr = umgr->GetUser(user);
+
+	if( ! usr )
 	{
-		this->SendErrorMessage(client, cmd, 404, "User not found");
+		logg << Logger::Notice << "User not found: " << umgr->StrError() << lend;
+		this->SendErrorMessage(client, cmd, 400, "Not found");
 		return;
 	}
 
-	Json::Value ret = this->GetUser(token, user);
+	Json::Value ret = this->UserToJson(usr);
 
 	this->SendOK(client, cmd,ret);
 }
@@ -567,13 +462,14 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	string user =		cmd["username"].asString();
+	string user = cmd["username"].asString();
 
 	// TODO: Validate that user exists!
 
-	// Get fetchmail addresses
-	FetchmailConfig fc( FETCHMAILRC );
-	list<map<string,string>> accounts = fc.GetAccounts(user);
+	MailManager& mmgr = MailManager::Instance();
+
+	// Get all remote addresses
+	list<map<string,string>> accounts = mmgr.GetRemoteAccounts(user);
 
 	Json::Value ids(Json::arrayValue);
 	for( auto& account: accounts )
@@ -582,12 +478,10 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 	}
 
 	// Get all smtp addresses
-	MailConfig mc;
-
-	list<string> domains = mc.GetDomains();
+	list<string> domains = mmgr.GetDomains();
 	for( const string& domain: domains)
 	{
-		list<tuple<string, string> > addresses = mc.GetAddresses( domain );
+		list<tuple<string, string> > addresses = mmgr.GetAddresses( domain );
 		for( auto address: addresses )
 		{
 			if( user == get<1>(address) )
@@ -614,13 +508,9 @@ void OpiBackendServer::DoUserExists(UnixStreamClientSocketPtr &client, Json::Val
 
 	string user =		cmd["username"].asString();
 
-	SecopPtr secop = SecopPtr( new Secop() );
+	UserManagerPtr umgr = UserManager::Instance();
 
-	secop->SockAuth();
-
-	vector<string> users  = secop->GetUsers();
-
-	bool exists = std::find(users.begin(), users.end(), user) != users.end();
+	bool exists = umgr->UserExists( user );
 
 	Json::Value ret;
 	ret["username"] = user;
@@ -655,13 +545,23 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
-	if( ! secop->AddAttribute(user, "displayname", disp) )
+	UserManagerPtr umgr = UserManager::Instance(secop);
+
+	UserPtr usr = umgr->GetUser(user);
+
+	if( ! usr )
 	{
+		logg <<  Logger::Notice << "Retrieve user failed: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
-	if( ! secop->AddAttribute(user, "defaultemail", defaultemail) )
+
+	usr->AddAttribute("displayname", disp);
+	usr->AddAttribute("defaultemail", defaultemail);
+
+	if( ! umgr->UpdateUser( usr ) )
 	{
+		logg <<  Logger::Notice << "Update user failed: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
@@ -678,17 +578,19 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-
 	string token = cmd["token"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
-	vector<string> usernames = secop->GetUsers();
+	UserManagerPtr umgr = UserManager::Instance(secop);
+
+	list<UserPtr> users = umgr->GetUsers();
+
 	Json::Value ret;
 	ret["users"]=Json::arrayValue;
-	for(auto user: usernames)
+	for(auto user: users)
 	{
-		ret["users"].append( this->GetUser(token, user) );
+		ret["users"].append( this->UserToJson( user) );
 	}
 
 	this->SendOK(client, cmd, ret);
@@ -713,7 +615,9 @@ void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
-	vector<string> groups = secop->GetUserGroups( user );
+	UserManagerPtr umgr = UserManager::Instance(secop);
+
+	list<string> groups = umgr->GetUserGroups( user );
 
 	Json::Value ret;
 	ret["groups"]=Json::arrayValue;
@@ -753,38 +657,11 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 
 	SecopPtr secop = wc->Secop();
 
-	list<map<string,string>>  ids = secop->GetIdentifiers( user, "opiuser");
-	if(ids.size() == 0 )
+	UserManagerPtr umgr = UserManager::Instance(secop);
+
+	if( ! umgr->UpdateUserPassword( user, newps, passw ) )
 	{
-		this->SendErrorMessage(client, cmd, 500, "Database error");
-		return;
-	}
-
-	map<string,string> id = ids.front();
-	if( id.find("password") == id.end() )
-	{
-		this->SendErrorMessage(client, cmd, 500, "Database error");
-		return;
-	}
-
-	/*
-	 *If user tries to change own password we want to verify that
-	 * they know old password.
-	 * Else we rely on secop catching unauthorized updates
-	 */
-
-	if( user == wc->Username() )
-	{
-		if( passw != id["password"] )
-		{
-			this->SendErrorMessage(client, cmd, 400, "Bad request");
-			return;
-
-		}
-	}
-
-	if( ! secop->UpdateUserPassword(user, newps) )
-	{
+		logg << Logger::Notice << "Failed to update user password: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
@@ -796,10 +673,9 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 {
 	ScopedLog l("Do get groups");
 
-	SecopPtr secop = SecopPtr( new Secop() );
-	secop->SockAuth();
+	UserManagerPtr umgr = UserManager::Instance();
 
-	vector<string> groups = secop->GetGroups();
+	list<string> groups = umgr->GetGroups();
 
 	Json::Value ret;
 	ret["groups"]=Json::arrayValue;
@@ -829,9 +705,12 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	string group =	cmd["group"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
+	UserManagerPtr umgr = UserManager::Instance(secop);
 
-	if( !secop->AddGroup(group) )
+
+	if( !umgr->AddGroup(group) )
 	{
+		logg << Logger::Notice << "Failed to add group: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
@@ -882,9 +761,11 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	string member =	cmd["member"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
+	UserManagerPtr umgr = UserManager::Instance(secop);
 
-	if( !secop->AddGroupMember(group, member) )
+	if( !umgr->AddGroupMember(group, member) )
 	{
+		logg << Logger::Notice << "Failed to add member to group: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
@@ -915,8 +796,9 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	string group =	cmd["group"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
+	UserManagerPtr umgr = UserManager::Instance(secop);
 
-	vector<string> members = secop->GetGroupMembers( group );
+	list<string> members = umgr->GetGroupMembers( group );
 
 	Json::Value ret;
 	ret["members"]=Json::arrayValue;
@@ -947,9 +829,11 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	string group =	cmd["group"].asString();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
+	UserManagerPtr umgr = UserManager::Instance(secop);
 
-	if( !secop->RemoveGroup(group) )
+	if( !umgr->DeleteGroup(group) )
 	{
+		logg << Logger::Notice << "Failed to delete group: " << umgr->StrError() << lend;
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
 	}
@@ -1007,8 +891,9 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	}
 
 	SecopPtr secop = wc->Secop();
+	UserManagerPtr umgr = UserManager::Instance(secop);
 
-	if( !secop->RemoveGroupMember(group, member) )
+	if( !umgr->DeleteGroupMember(group, member) )
 	{
 		this->SendErrorMessage(client, cmd, 400, "Operation failed");
 		return;
@@ -1373,6 +1258,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 
 
 // Todo: rewrite (Implement service/process in utils?)
+/*
 static bool update_postfix()
 {
 	int ret;
@@ -1410,7 +1296,9 @@ static bool update_postfix()
 
 	return true;
 }
+*/
 
+// TODO: This should move into MailManager, libkinguard
 static void postfix_fixpaths()
 {
     SysConfig sysconfig;
@@ -3123,29 +3011,22 @@ void OpiBackendServer::ReapClients()
 	this->lastreap = time(nullptr);
 }
 
-Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
+Json::Value OpiBackendServer::UserToJson(const UserPtr user)
 {
-	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
 
 	Json::Value ret;
-	ret["username"] = user;
-	ret["id"] = user;
+	ret["username"] = user->GetUsername();
+	ret["id"] = user->GetUsername();
+	ret["displayname"] = user->GetDisplayname();
+
 	try
 	{
-		ret["displayname"] = secop->GetAttribute(user,"displayname");
+		ret["defaultemail"] = user->GetAttribute("defaultemail");
 	}
-	catch( std::runtime_error err)
-	{
-		// No error if displayname missing
-		ret["displayname"] ="";
-	}
-	try
-	{
-		ret["defaultemail"] = secop->GetAttribute(user,"defaultemail");
-	}
-	catch( std::runtime_error err)
+	catch( std::runtime_error& err)
 	{
 		// No error if default email is missing
+		(void) err;
 		ret["defaultemail"] ="";
 	}
 

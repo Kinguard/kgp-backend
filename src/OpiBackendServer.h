@@ -16,6 +16,8 @@
 
 #include <libkgpnotify/kgpNotify.h>
 
+#include <kinguard/UserManager.h>
+
 #include "Config.h"
 
 #include "WebClient.h"
@@ -132,7 +134,7 @@ private:
 	// ONLY call this when not processing a request!
 	void ReapClients();
 
-	Json::Value GetUser(const string& token, const string& user);
+	Json::Value UserToJson(const KGP::UserPtr user);
 
 	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
