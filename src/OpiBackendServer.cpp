@@ -858,7 +858,9 @@ static bool addusertomailadmin( const string& user )
 	catch( runtime_error& err )
 	{
 		logg << Logger::Error << "Failed to add user to adminmail" << err.what()<<lend;
+		return false;
 	}
+	return true;
 }
 
 void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -973,7 +975,9 @@ static bool removeuserfrommailadmin( const string& user )
 	catch( runtime_error& err )
 	{
 		logg << Logger::Error << "Failed to remove user from adminmail" << err.what()<<lend;
+		return false;
 	}
+	return true;
 }
 
 void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1726,9 +1730,6 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 		ret["port"] =		conf.port;
 		break;
 	}
-	default:
-		throw runtime_error("No valid config");
-		break;
 	}
 
 	this->SendOK(client, cmd,ret);
@@ -2428,9 +2429,9 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	if( cfg["addressing"].asString() == "static" )
 	{
 		ret["type"] = "static";
-		ret["ipnumber"] = cfg["options"]["address"][(uint)0].asString();
-		ret["netmask"] = cfg["options"]["netmask"][(uint)0].asString();
-		ret["gateway"] = cfg["options"]["gateway"][(uint)0].asString();
+		ret["ipnumber"] = cfg["options"]["address"][static_cast<uint>(0)].asString();
+		ret["netmask"] = cfg["options"]["netmask"][static_cast<uint>(0)].asString();
+		ret["gateway"] = cfg["options"]["gateway"][static_cast<uint>(0)].asString();
 	}
 	else if( cfg["addressing"].asString() == "dhcp" )
 	{
@@ -2850,7 +2851,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		}
 		catch ( std::runtime_error& err )
 		{
-			logg << Logger::Error<< "Failed to set keys in sysconfig" <<lend;
+			logg << Logger::Error<< "Failed to set keys in sysconfig: " << err.what() <<lend;
 			this->SendErrorMessage(client, cmd, 500, "Failed to set keys in sysconfig");
 			return;
 		}
@@ -2878,7 +2879,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		}
 		catch ( std::runtime_error& err )
 		{
-			logg << Logger::Error<< "Failed to disabled keys in sysconfig" <<lend;
+			logg << Logger::Error<< "Failed to disabled keys in sysconfig: " << err.what() <<lend;
 			this->SendErrorMessage(client, cmd, 500, "Failed to disable keys in sysconfig");
 			return;
 		}
@@ -2893,13 +2894,13 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
     ScopedLog l("Do System Get Type");
     Json::Value ret;
 
-    int type;
+	size_t type;
     string typeText;
 
     type=OPI::sysinfo.Type();
     typeText=OPI::sysinfo.SysTypeText[type];
 
-    ret["type"]=type;
+	ret["type"]=Json::Int(type);
     ret["typeText"]=typeText;
 
     try
@@ -2908,6 +2909,7 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
     }
     catch( std::runtime_error& err)
     {
+		(void) err;
         logg << Logger::Debug << "No webapps theme set" <<lend;
     }
 
@@ -2998,6 +3000,7 @@ string OpiBackendServer::getSysconfigString(string scope, string key)
 		}
 		catch( std::runtime_error& err)
 		{
+			(void) err;
 			logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
 		}
 	}
@@ -3014,6 +3017,7 @@ bool OpiBackendServer::getSysconfigBool(string scope, string key)
 		}
 		catch( std::runtime_error& err)
 		{
+			(void) err;
 			logg << Logger::Debug << "Missing "<< scope << "->" << key << " in sysconfig" <<lend;
 		}
 	}
@@ -3107,7 +3111,7 @@ string OpiBackendServer::BackendLogin(const string &unit_id)
 void OpiBackendServer::ReapClients()
 {
 	// Only reap once a minute
-	if( this->lastreap + 60 > time(NULL) )
+	if( this->lastreap + 60 > time(nullptr) )
 	{
 		return;
 	}
@@ -3116,7 +3120,7 @@ void OpiBackendServer::ReapClients()
 
 	this->clients.Reap();
 
-	this->lastreap = time(NULL);
+	this->lastreap = time(nullptr);
 }
 
 Json::Value OpiBackendServer::GetUser(const string &token, const string &user)
@@ -3180,6 +3184,7 @@ void OpiBackendServer::SendReply(UnixStreamClientSocketPtr &client, Json::Value 
 
 void OpiBackendServer::SendErrorMessage(UnixStreamClientSocketPtr &client, const Json::Value &cmd, int errcode, const string &msg)
 {
+	(void) cmd;
 	Json::Value ret(Json::objectValue);
 	ret["status"]["value"]=errcode;
 	ret["status"]["desc"]=msg;
@@ -3189,6 +3194,7 @@ void OpiBackendServer::SendErrorMessage(UnixStreamClientSocketPtr &client, const
 
 void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Value &cmd, const Json::Value &val)
 {
+	(void) cmd;
 	Json::Value ret(Json::objectValue);
 	ret["status"]["value"]=0;
 	ret["status"]["desc"]="OK";
