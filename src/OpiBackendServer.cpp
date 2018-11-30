@@ -6,11 +6,9 @@
 #include <libutils/FileUtils.h>
 #include <libutils/ConfigFile.h>
 #include <libutils/UserGroups.h>
-#include <libutils/Process.h>
 #include <libutils/Regex.h>
 
 #include <libopi/AuthServer.h>
-#include <libopi/CryptoHelper.h>
 #include <libopi/ServiceHelper.h>
 #include <libopi/NetworkConfig.h>
 #include <libopi/SmtpConfig.h>
@@ -971,6 +969,7 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 
 }
 
+// TODO: Refactor and modularize, opi/s3 specifics
 void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
@@ -1037,6 +1036,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     this->SendOK(client, cmd, res);
 }
 
+// TODO: Refactor and modularize, opi/s3 specifics
 void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
@@ -1502,6 +1502,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	}
 }
 
+//TODO: Refactor this out, OPI specifics
 void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp get settings");
@@ -1543,6 +1544,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 	this->SendOK(client, cmd,ret);
 }
 
+//TODO: Refactor this out, OPI specifics
 void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do smtp set settings");
@@ -2549,6 +2551,7 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 		
 }
 
+//TODO: Refactor
 void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Get Unitid");
@@ -2578,6 +2581,7 @@ void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json
 
 }
 
+//TODO: Refactor
 void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Set Unitid");
@@ -2629,7 +2633,8 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		{
 			passphrase = data.back();
 			passphrasefound = true;
-			logg << Logger::Debug << "Read passphrase: " << passphrase <<lend;
+			// Don't write sensitive data to logfile
+			//logg << Logger::Debug << "Read passphrase: " << passphrase <<lend;
 			break;
 		}
 	}
@@ -2642,14 +2647,14 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 
 	// Input data confirmed, move on to verify password.
 
-
 	string calc_passphrase;
 	SecString spass(mpwd.c_str(), mpwd.size() );
 	SecVector<byte> key = PBKDF2( spass, 20);
 	vector<byte> ukey(key.begin(), key.end());
 
 	calc_passphrase = Base64Encode( ukey );
-	logg << Logger::Debug<< "Calculated passphrase: " << calc_passphrase <<lend;
+	// Don't write sensitive data to logfile
+	//logg << Logger::Debug<< "Calculated passphrase: " << calc_passphrase <<lend;
 
 	if ( passphrase != calc_passphrase)
 	{
