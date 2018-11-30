@@ -4,11 +4,11 @@ cmake_minimum_required(VERSION 2.8)
 include( FindPkgConfig )
 pkg_check_modules ( LIBUTILS REQUIRED libutils>=1.5.12 )
 pkg_check_modules ( LIBOPI REQUIRED libopi>=1.6.44 )
-pkg_check_modules  ( LIBKINGUARD REQUIRED libkinguard )
+pkg_check_modules  ( LIBKINGUARD REQUIRED libkinguard>=1.0.4 )
 pkg_check_modules ( LIBNOTIFY REQUIRED libkgpnotify )
 
 set (OPIB_VERSION_MAJOR 1)
-set (OPIB_VERSION_MINOR 0)
+set (OPIB_VERSION_MINOR 14)
 set (OPIB_APP_NAME "opi-backend")
 
 set (APP_PATH "${PROJECT_BINARY_DIR}")

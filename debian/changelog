@@ -1,3 +1,12 @@
+opi-backend (1.14.1) vili; urgency=medium
+
+  * Use common typechecker in libopi
+  * Use Kinguard UserManager whenever possible
+  * Use Kinguard MailManager whenever possible
+  * Code cleanups
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 30 Nov 2018 09:47:45 +0100
+
 opi-backend (1.14.0) vili; urgency=medium
 
   * Add dep on libkinguard, start using libkinguard "Managers" 
