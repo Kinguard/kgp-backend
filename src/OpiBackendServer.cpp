@@ -9,14 +9,11 @@
 #include <libutils/Process.h>
 #include <libutils/Regex.h>
 
-#include <libopi/DnsServer.h>
 #include <libopi/AuthServer.h>
 #include <libopi/CryptoHelper.h>
 #include <libopi/ServiceHelper.h>
 #include <libopi/NetworkConfig.h>
 #include <libopi/SmtpConfig.h>
-#include <libopi/FetchmailConfig.h>
-#include <libopi/MailConfig.h>
 #include <libopi/SysInfo.h>
 #include <libopi/ExtCert.h>
 #include <libopi/SysConfig.h>
@@ -29,15 +26,16 @@
 #include <kinguard/MailManager.h>
 
 #include <algorithm>
+
 #include <unistd.h>
-#include <uuid/uuid.h>
-#include <regex>
 #include <linux/limits.h>
 
 using namespace OPI;
 using namespace OPI::JsonHelper;
 using namespace KGP;
 
+// Convenience defines
+#define SCFG	(OPI::SysConfig())
 
 /*
  * Bit patterns for argument checks
@@ -87,10 +85,7 @@ static vector<TypeChecker::Check> argchecks(
 	});
 
 // Utility function forwards
-//static bool update_postfix();
 static void postfix_fixpaths();
-static bool addusertomailadmin( const string& user );
-static bool removeuserfrommailadmin( const string& user );
 
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0),
@@ -718,30 +713,6 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	this->SendOK(client, cmd);
 }
 
-
-static bool addusertomailadmin( const string& user )
-{
-	try
-	{
-        string valias = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","virtualalias");
-
-        MailAliasFile mf( valias );
-
-		mf.AddUser("/^postmaster@/",user+"@localdomain");
-		mf.AddUser("/^root@/",user+"@localdomain");
-
-		mf.WriteConfig();
-
-		ServiceHelper::Reload("postfix");
-	}
-	catch( runtime_error& err )
-	{
-		logg << Logger::Error << "Failed to add user to adminmail" << err.what()<<lend;
-		return false;
-	}
-	return true;
-}
-
 void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do add group member");
@@ -772,7 +743,21 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 
 	if( group == "admin" )
 	{
-		addusertomailadmin(member);
+		MailManager& mmgr = MailManager::Instance();
+
+		if( ! mmgr.AddToAdmin( member ) )
+		{
+			logg << Logger::Error << "Failed to add user to admin mail: "<< mmgr.StrError() << lend;
+			this->SendErrorMessage(client, cmd, 400, "Operation failed");
+			return;
+		}
+
+		if( ! mmgr.Synchronize() )
+		{
+			logg << Logger::Error << "Failed to synchronize mail settings: "<< mmgr.StrError() << lend;
+			this->SendErrorMessage(client, cmd, 500, "Operation failed");
+			return;
+		}
 	}
 
 	this->SendOK(client, cmd);
@@ -841,29 +826,6 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	this->SendOK(client, cmd);
 }
 
-static bool removeuserfrommailadmin( const string& user )
-{
-	try
-	{
-        string valias = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","virtualalias");
-
-        MailAliasFile mf( valias );
-
-		mf.RemoveUser("/^postmaster@/",user+"@localdomain");
-		mf.RemoveUser("/^root@/",user+"@localdomain");
-
-		mf.WriteConfig();
-
-		ServiceHelper::Reload("postfix");
-	}
-	catch( runtime_error& err )
-	{
-		logg << Logger::Error << "Failed to remove user from adminmail" << err.what()<<lend;
-		return false;
-	}
-	return true;
-}
-
 void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do group remove member");
@@ -901,7 +863,21 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 
 	if( group == "admin" )
 	{
-		removeuserfrommailadmin( member );
+		MailManager& mmgr = MailManager::Instance();
+
+		if( ! mmgr.RemoveFromAdmin( member ) )
+		{
+			logg << Logger::Error << "Failed to add user to admin mail: "<< mmgr.StrError() << lend;
+			this->SendErrorMessage(client, cmd, 400, "Operation failed");
+			return;
+		}
+
+		if( ! mmgr.Synchronize() )
+		{
+			logg << Logger::Error << "Failed to synchronize mail settings: "<< mmgr.StrError() << lend;
+			this->SendErrorMessage(client, cmd, 500, "Operation failed");
+			return;
+		}
 	}
 
 	this->SendOK(client, cmd);
@@ -1204,7 +1180,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 			res["info"] = "";
 		}
 	}
-
+	// TODO: Send error reply when fail
 	this->SendOK(client, cmd, res);
 
 }
@@ -1218,9 +1194,9 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 		return;
 	}
 
-	MailConfig mc;
+	MailManager& mmgr = MailManager::Instance();
 
-	list<string> domains = mc.GetDomains();
+	list<string> domains = mmgr.GetDomains();
 
 	Json::Value res(Json::objectValue);
 	res["domains"]=Json::arrayValue;
@@ -1248,55 +1224,18 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 
 	string domain = cmd["domain"].asString();
 
-	MailConfig mc;
+	MailManager& mmgr = MailManager::Instance();
+	mmgr.AddDomain( domain );
 
-	mc.AddDomain(domain);
-	mc.WriteConfig();
+	if( ! mmgr.Synchronize() )
+	{
+		logg << Logger::Error << "Failed to synchronize mail manager: " << mmgr.StrError() << lend;
+		this->SendErrorMessage( client, cmd, 500, "Failed to add domain");
+		return;
+	}
 
 	this->SendOK(client, cmd);
 }
-
-
-// Todo: rewrite (Implement service/process in utils?)
-/*
-static bool update_postfix()
-{
-	int ret;
-    SysConfig sysconfig;
-
-    string aliases = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","vmailbox");
-    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + aliases );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-    string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","saslpasswd");
-    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + saslpwd );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-
-    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","localmail");
-    tie(ret, std::ignore) = Utils::Process::Exec( "/usr/sbin/postmap " + localmail );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-
-	ret = system( "/usr/sbin/service postfix reload &> /dev/null" );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-
-	return true;
-}
-*/
 
 // TODO: This should move into MailManager, libkinguard
 static void postfix_fixpaths()
@@ -1327,22 +1266,22 @@ static void postfix_fixpaths()
         File::Write( localmail, "", 0600);
 	}
 
-    if( chown( aliases.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	if( chown( aliases.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
 	}
 
-    if( chown( saslpwd.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	if( chown( saslpwd.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on saslpasswd file"<<lend;
 	}
 
-    if( chown( domains.c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	if( chown( domains.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on domain file"<<lend;
 	}
 
-    if( chown( File::GetPath(domains).c_str(), User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
+	if( chown( File::GetPath(domains).c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
 	{
 		logg << Logger::Error << "Failed to change owner on config directory"<<lend;
 	}
@@ -1352,23 +1291,6 @@ static void postfix_fixpaths()
 		logg << Logger::Error << "Failed to change mode on config directory"<<lend;
 	}
 }
-
-static bool restart_fetchmail()
-{
-	int ret;
-
-
-	ret = system( "/usr/sbin/service fetchmail restart &> /dev/null" );
-
-	if( (ret < 0) || WEXITSTATUS(ret) != 0 )
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
 
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
@@ -1391,13 +1313,14 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 
 	string user = this->clients.GetClientByToken( token )->Username();
 
-	MailConfig mc;
+
+	MailManager& mmgr = MailManager::Instance();
 
 	// We only allow delete of domain if you are admin OR
 	// is the only user of this domain
 	if( ! admin )
 	{
-		list<tuple<string, string> > addresses = mc.GetAddresses(domain);
+		list<tuple<string, string> > addresses = mmgr.GetAddresses(domain);
 
 		for( auto address: addresses)
 		{
@@ -1410,16 +1333,16 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 
 	}
 
-	mc.DeleteDomain(domain);
-	mc.WriteConfig();
+	mmgr.DeleteDomain( domain );
 
-	if( update_postfix() )
+	if( !mmgr.Synchronize() )
 	{
-		this->SendOK(client, cmd);
+		logg << Logger::Error << "Failed to synchronize mailmanager: " << mmgr.StrError() << lend;
+		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
 	}
 	else
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+		this->SendOK(client, cmd);
 	}
 }
 
@@ -1443,9 +1366,9 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 	bool admin = this->isAdmin( token );
 	string user = this->clients.GetClientByToken( token )->Username();
 
-	MailConfig mc;
+	MailManager& mmgr = MailManager::Instance();
 
-	list<tuple<string,string>> addresses = mc.GetAddresses(domain);
+	list<tuple<string,string>> addresses = mmgr.GetAddresses(domain);
 
 	Json::Value res(Json::objectValue);
 	res["addresses"]=Json::arrayValue;
@@ -1464,7 +1387,6 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 	}
 
 	this->SendOK(client, cmd, res);
-
 }
 
 void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1496,16 +1418,16 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 		return;
 	}
 
-	MailConfig mc;
+	MailManager& mmgr = MailManager::Instance();
 
 	if( ! admin )
 	{
 		// Non admin users can only add not used addresses
 		// or update their own addresses
-		if( mc.hasAddress( domain, address) )
+		if( mmgr.hasAddress( domain, address) )
 		{
 			string adr, localuser;
-			tie(adr, localuser) = mc.GetAddress(domain,address);
+			tie(adr, localuser) = mmgr.GetAddress(domain,address);
 
 			if( user != localuser )
 			{
@@ -1516,10 +1438,9 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 		}
 	}
 
-	mc.SetAddress(domain, address, username);
-	mc.WriteConfig();
+	mmgr.SetAddress(domain, address, username);
 
-	if( update_postfix() )
+	if( mmgr.Synchronize() )
 	{
 		this->SendOK(client, cmd);
 	}
@@ -1550,15 +1471,15 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	string domain = cmd["domain"].asString();
 	string address = cmd["address"].asString();
 
-	MailConfig mc;
+	MailManager& mmgr = MailManager::Instance();
 
 	if( ! admin )
 	{
 		// None admins can only delete their own addresses
-		if( mc.hasAddress(domain, address) )
+		if( mmgr.hasAddress(domain, address) )
 		{
 			string adr, localuser;
-			tie(adr, localuser) = mc.GetAddress(domain,address);
+			tie(adr, localuser) = mmgr.GetAddress(domain,address);
 
 			if( user != localuser )
 			{
@@ -1569,10 +1490,9 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 		}
 	}
 
-	mc.DeleteAddress( domain, address );
-	mc.WriteConfig();
+	mmgr.DeleteAddress( domain, address );
 
-	if( update_postfix() )
+	if( mmgr.Synchronize() )
 	{
 		this->SendOK(client, cmd);
 	}
@@ -1694,9 +1614,16 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	update_postfix();
-
-	this->SendOK(client, cmd);
+	MailManager& mmgr = MailManager::Instance();
+	if( mmgr.Synchronize( true ) )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		logg << Logger::Error << "Failed to update smtp settings: " << mmgr.StrError() << lend;
+		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+	}
 }
 
 void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1715,8 +1642,9 @@ void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client,
 		user = cmd["username"].asString();
 	}
 
-	FetchmailConfig fc( FETCHMAILRC );
-	list<map<string,string>> accounts = fc.GetAccounts(user);
+	MailManager& mmgr = MailManager::Instance();
+
+	list<map<string,string>> accounts = mmgr.GetRemoteAccounts(user);
 
 	Json::Value ret(Json::objectValue);
 	ret["accounts"] = Json::arrayValue;
@@ -1753,8 +1681,8 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 	string host = cmd["hostname"].asString();
 	string id = cmd["identity"].asString();
 
-	FetchmailConfig fc( FETCHMAILRC );
-	map<string,string> account = fc.GetAccount(host,id);
+	MailManager& mmgr = MailManager::Instance();
+	map<string,string> account = mmgr.GetRemoteAccount(host,id);
 
 	Json::Value ret(Json::objectValue);
 	ret["email"] = account["email"];
@@ -1800,13 +1728,19 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 		return;
 	}
 
-	FetchmailConfig fc( FETCHMAILRC );
+	MailManager& mmgr = MailManager::Instance();
 
-	fc.AddAccount(email, host, id, pwd, user, ssl == "true" );
-	fc.WriteConfig();
-	restart_fetchmail();
+	mmgr.AddRemoteAccount(email, host, id, pwd, user, ssl == "true" );
 
-	this->SendOK(client, cmd);
+	if( mmgr.Synchronize() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
+		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+	}
 }
 
 void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1842,14 +1776,14 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	FetchmailConfig fc( FETCHMAILRC );
+	MailManager& mmgr = MailManager::Instance();
 
 	if( (ohost != host) || (oid != id ) )
 	{
 		// We have updated id fields, need to re-add account
-		map<string,string> acc = fc.GetAccount(ohost, oid);
+		map<string,string> acc = mmgr.GetRemoteAccount(ohost, oid);
 
-		fc.DeleteAccount(ohost, oid);
+		mmgr.DeleteRemoteAccount(ohost, oid);
 
 		acc["email"] =		(email != "" ) ? email : acc["email"];
 		acc["host"] =		host;
@@ -1858,16 +1792,22 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		acc["password"] =	(pwd != "") ? pwd : acc["password"];
 		acc["ssl"] =		(ssl != "") ? ssl : acc["ssl"];
 
-		fc.AddAccount(acc["email"],acc["host"],acc["identity"],acc["password"],acc["username"],acc["ssl"]=="true");
+		mmgr.AddRemoteAccount(acc["email"],acc["host"],acc["identity"],acc["password"],acc["username"],acc["ssl"]=="true");
 	}
 	else
 	{
-		fc.UpdateAccount(email, host, id, pwd, user, ssl == "true" );
+		mmgr.UpdateRemoteAccount(email, host, id, pwd, user, ssl == "true" );
 	}
-	fc.WriteConfig();
-	restart_fetchmail();
 
-	this->SendOK(client, cmd);
+	if( mmgr.Synchronize() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
+		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+	}
 }
 
 void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1888,9 +1828,9 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 	string id = cmd["identity"].asString();
 	string token = cmd["token"].asString();
 
-	FetchmailConfig fc( FETCHMAILRC );
+	MailManager& mmgr = MailManager::Instance();
 
-	map<string,string> account = fc.GetAccount(host, id);
+	map<string,string> account = mmgr.GetRemoteAccount(host, id);
 
 	if( ! this->isAdminOrUser( token, account["username"] ) )
 	{
@@ -1898,11 +1838,17 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	fc.DeleteAccount(host, id );
-	fc.WriteConfig();
-	restart_fetchmail();
+	mmgr.DeleteRemoteAccount(host, id );
 
-	this->SendOK(client, cmd);
+	if( mmgr.Synchronize() )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
+		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+	}
 }
 
 void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
@@ -2644,7 +2590,6 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	{
 		return;
 	}
-
 
 	// Manually verify passed parameters
 	if( !cmd.isMember("unitid") && !cmd["unitid"].isString() )
