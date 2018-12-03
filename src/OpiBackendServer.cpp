@@ -1848,7 +1848,7 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 	}
 	else
 	{
-		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
+		logg << Logger::Error << "Failed to delete fetchmail account: "<< mmgr.StrError() << lend;
 		this->SendErrorMessage(client, cmd, 500, "Operation failed");
 	}
 }
