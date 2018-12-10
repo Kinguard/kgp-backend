@@ -1,3 +1,9 @@
+opi-backend (1.14.2) vili; urgency=medium
+
+  * Add dependency on kgp-ccheck to try get preconditions right
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 10 Dec 2018 09:34:30 +0100
+
 opi-backend (1.14.1) vili; urgency=medium
 
   * Use common typechecker in libopi

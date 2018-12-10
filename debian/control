@@ -23,4 +23,5 @@ Homepage: http://www.openproducts.com
 Package: opi-backend
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, secop, kinguard-certhandler, libkinguard1, libopi1
+Pre-Depends: kgp-ccheck (>=1.0)
 Description: OPI backend manages admin ops for OPI
