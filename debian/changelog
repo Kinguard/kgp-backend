@@ -1,3 +1,9 @@
+opi-backend (1.14.3) vili; urgency=medium
+
+  * Check "bucket" config param exists before trying to read it. 
+
+ -- PA Nilsson <pa@openproducts.se>  Tue, 11 Dec 2018 18:34:40 +0100
+
 opi-backend (1.14.2) vili; urgency=medium
 
   * Add dependency on kgp-ccheck to try get preconditions right

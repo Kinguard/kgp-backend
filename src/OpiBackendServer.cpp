@@ -1069,7 +1069,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
         else if (backend == "amazon")
         {
             sysconfig.PutKey("backup","backend", string("s3://"));
-            if(sysconfig.GetKeyAsString("backup","bucket") != AWSbucket)
+			if(sysconfig.HasKey("backup","bucket") && (sysconfig.GetKeyAsString("backup","bucket") != AWSbucket) )
             {
                 // bucket has changed, umount the backend to trigger new mount on next backup
                 Process::Exec( BACKUP_UMOUNT_FS);
