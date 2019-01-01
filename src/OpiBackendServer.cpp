@@ -82,9 +82,6 @@ static vector<TypeChecker::Check> argchecks(
 			{ CHK_ORIGID, "orighostname",			TypeChecker::STRING },
 	});
 
-// Utility function forwards
-static void postfix_fixpaths();
-
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0),
 	typechecker(argchecks, OpiBackendServer::typecheckcallback)
@@ -164,7 +161,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 
 
 	// Setup mail paths etc
-	postfix_fixpaths();
+	MailManager::SetupEnvironment();
 
 	// Initialize time for last reap
 	this->lastreap = time(nullptr);
@@ -1235,61 +1232,6 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 	}
 
 	this->SendOK(client, cmd);
-}
-
-// TODO: This should move into MailManager, libkinguard
-static void postfix_fixpaths()
-{
-    SysConfig sysconfig;
-
-    string aliases = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","vmailbox");
-    if( ! File::FileExists( aliases ) )
-	{
-        File::Write( aliases, "", 0600);
-    }
-
-    string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount")  + sysconfig.GetKeyAsString("mail","saslpasswd");
-    if( ! File::FileExists( saslpwd ) )
-	{
-        File::Write( saslpwd, "", 0600);
-	}
-
-    string domains = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","vdomains");
-    if( ! File::FileExists( domains ) )
-	{
-        File::Write( domains, "", 0600);
-	}
-
-    string localmail = sysconfig.GetKeyAsString("filesystem","storagemount") + sysconfig.GetKeyAsString("mail","localmail");
-    if( ! File::FileExists( localmail ) )
-	{
-        File::Write( localmail, "", 0600);
-	}
-
-	if( chown( aliases.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
-	{
-		logg << Logger::Error << "Failed to change owner on aliases file"<<lend;
-	}
-
-	if( chown( saslpwd.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
-	{
-		logg << Logger::Error << "Failed to change owner on saslpasswd file"<<lend;
-	}
-
-	if( chown( domains.c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
-	{
-		logg << Logger::Error << "Failed to change owner on domain file"<<lend;
-	}
-
-	if( chown( File::GetPath(domains).c_str(), Utils::User::UserToUID("postfix"), Group::GroupToGID("postfix") ) != 0)
-	{
-		logg << Logger::Error << "Failed to change owner on config directory"<<lend;
-	}
-
-    if( chmod( File::GetPath(domains).c_str(), 0700 ) != 0)
-	{
-		logg << Logger::Error << "Failed to change mode on config directory"<<lend;
-	}
 }
 
 void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
