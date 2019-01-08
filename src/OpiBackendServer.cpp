@@ -889,6 +889,18 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 
 	string action =	cmd["action"].asString();
 
+	if( action == "shutdown" || action == "reboot" )
+	{
+		this->SendOK(client, cmd);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, 400, "Bad request");
+		return;
+	}
+
+	// give some time for UI to respond
+	sleep(3);
 	if( action == "shutdown")
 	{
 		system("/sbin/poweroff");
@@ -897,13 +909,6 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	{
 		system("/sbin/reboot");
 	}
-	else
-	{
-		this->SendErrorMessage(client, cmd, 400, "Bad request");
-		return;
-	}
-
-	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)

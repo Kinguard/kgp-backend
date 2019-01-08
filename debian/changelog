@@ -1,3 +1,9 @@
+opi-backend (1.14.4) vili; urgency=medium
+
+  * Return 'OK' to UI before shutting down the system. 
+
+ -- PA Nilsson <pa@openproducts.se>  Tue, 08 Jan 2019 19:33:18 +0100
+
 opi-backend (1.14.3) vili; urgency=medium
 
   * Check "bucket" config param exists before trying to read it. 
