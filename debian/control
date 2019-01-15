@@ -16,7 +16,7 @@ Build-Depends: debhelper (>= 8.0.0),
 	libkgpnotify-dev,
 	libopi-dev,
 	libcppunit-dev,
-	libkinguard-dev (>=1.0.1)
+	libkinguard-dev (>=1.0.9)
 Standards-Version: 3.9.4
 Homepage: http://www.openproducts.com
 
