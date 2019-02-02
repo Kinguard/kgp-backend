@@ -1,3 +1,9 @@
+opi-backend (1.14.6) vili; urgency=medium
+
+  * Bump dependancy on libkinguard. 
+
+ -- PA Nilsson <pa@openproducts.se>  Sat, 02 Feb 2019 10:51:06 +0100
+
 opi-backend (1.14.5) vili; urgency=medium
 
   * Bump dependency on libkinguard
