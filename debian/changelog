@@ -1,3 +1,15 @@
+opi-backend (1.14.9) vili; urgency=medium
+
+  * Enable dns with idmanager before try register keys
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 03 Oct 2019 19:25:24 +0200
+
+opi-backend (1.14.8) vili; urgency=medium
+
+  * Buster adaptations
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 29 Aug 2019 15:08:08 +0200
+
 opi-backend (1.14.7) vili; urgency=medium
 
   * Bump dependencies once more

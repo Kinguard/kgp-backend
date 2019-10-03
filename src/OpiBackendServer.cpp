@@ -2615,6 +2615,9 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 
 	if ( enabled )
 	{
+		// Enable in config
+		idmgr.EnableDnsProvider("OpenProducts");
+
 		// Try to login and set system keys
 		bool status;
 		string token;
