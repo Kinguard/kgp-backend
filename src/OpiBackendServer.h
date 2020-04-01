@@ -59,6 +59,9 @@ private:
 
 	void DoShutdown(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 
+	/*
+	 * Settings for automatic updates
+	 */
 	void DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
@@ -66,6 +69,7 @@ private:
 	void DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupStartBackup(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 	void DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd);
@@ -105,6 +109,10 @@ private:
     void DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 	void DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+
+	void DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd);
 
 
 	// Key management

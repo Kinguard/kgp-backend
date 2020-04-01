@@ -20,6 +20,8 @@
 #include <libopi/JsonHelper.h>
 
 #include <kinguard/IdentityManager.h>
+#include <kinguard/BackupManager.h>
+#include <kinguard/SystemManager.h>
 #include <kinguard/UserManager.h>
 #include <kinguard/MailManager.h>
 
@@ -115,6 +117,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->actions["backupsetsettings"]=&OpiBackendServer::DoBackupSetSettings;
 	this->actions["backupgetQuota"]=&OpiBackendServer::DoBackupGetQuota;
 	this->actions["backupgetstatus"]=&OpiBackendServer::DoBackupGetStatus;
+	this->actions["backupstartbackup"]=&OpiBackendServer::DoBackupStartBackup;
 
 	this->actions["smtpgetdomains"]=&OpiBackendServer::DoSmtpGetDomains;
 	this->actions["smtpadddomain"]=&OpiBackendServer::DoSmtpAddDomain;
@@ -158,6 +161,9 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
     this->actions["dosystemgettype"]=&OpiBackendServer::DoSystemGetType;
 	this->actions["dosystemgetunitid"]=&OpiBackendServer::DoSystemGetUnitid;
 	this->actions["dosystemsetunitid"]=&OpiBackendServer::DoSystemSetUnitid;
+	this->actions["dosystemgetupgrade"]=&OpiBackendServer::DoSystemGetUpgrade;
+	this->actions["dosystemstartupgrade"]=&OpiBackendServer::DoSystemStartUpgrade;
+	this->actions["dosystemstartupdate"]=&OpiBackendServer::DoSystemStartUpdate;
 
 
 	// Setup mail paths etc
@@ -1185,6 +1191,27 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 	// TODO: Send error reply when fail
 	this->SendOK(client, cmd, res);
 
+}
+
+void OpiBackendServer::DoBackupStartBackup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("Do backup start backup");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	if( ! BackupManager::InProgress() )
+	{
+		if( ! BackupManager::StartBackup() )
+		{
+			this->SendErrorMessage(client, cmd, 500, "Failed to start backup");
+			return;
+		}
+	}
+
+	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -2351,9 +2378,10 @@ void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Va
 		return;
 	}
 
-	int res = system( "/usr/share/opi-backend/enable_shell.sh" );
+	bool ret;
+	tie(ret, std::ignore) = Process::Exec("/usr/share/opi-backend/enable_shell.sh");
 
-	if( ( res < 0) || WEXITSTATUS(res) != 0 )
+	if( ! ret )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to enable shell");
 		return;
@@ -2371,9 +2399,11 @@ void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::V
 		return;
 	}
 
-	int res = system( "/usr/share/opi-backend/disable_shell.sh" );
 
-	if( ( res < 0) || WEXITSTATUS(res) != 0 )
+	bool ret;
+	tie(ret, std::ignore) = Process::Exec( "/usr/share/opi-backend/disable_shell.sh" );
+
+	if( !ret )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to disable shell");
 		return;
@@ -2674,6 +2704,63 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	}
 	this->SendOK(client, cmd, ret);
 
+}
+
+// Start a detached update
+void OpiBackendServer::DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("DoSystemStartUpdate");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	SystemManager::StartUpdate();
+
+	this->SendOK(client, cmd);
+}
+
+// Is there a system upgrade available
+void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("DoSystemGetUpgrade");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	bool upgradeavailable;
+	string description;
+
+	tie(upgradeavailable, description) = SystemManager::UpgradeAvailable();
+
+	Json::Value res(Json::objectValue);
+
+	res["available"] = upgradeavailable;
+	res["description"] = "";
+	if( upgradeavailable )
+	{
+		res["description"] = description;
+	}
+
+	this->SendOK(client, cmd, res);
+}
+
+// Initialize system upgrade
+void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+{
+	ScopedLog l("DoSystemStartUpgrade");
+
+	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
+	{
+		return;
+	}
+
+	SystemManager::StartUpgrade();
+
+	this->SendOK(client, cmd);
 }
 
 
