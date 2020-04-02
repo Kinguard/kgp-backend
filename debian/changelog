@@ -1,3 +1,10 @@
+opi-backend (1.15.0) vili; urgency=medium
+
+  * Add system update and upgrade command
+  * Add start backup command
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 01 Apr 2020 08:35:16 +0200
+
 opi-backend (1.14.9) vili; urgency=medium
 
   * Enable dns with idmanager before try register keys
