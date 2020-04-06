@@ -1,3 +1,11 @@
+opi-backend (1.15.1) vili; urgency=medium
+
+  * Only terminate main process upon service termination. Since we
+    now spawn update, upgrade etc. We must make sure that these are
+    not terminated upon backend update.
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 06 Apr 2020 22:17:31 +0200
+
 opi-backend (1.15.0) vili; urgency=medium
 
   * Add system update and upgrade command
