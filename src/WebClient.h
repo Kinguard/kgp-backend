@@ -46,7 +46,7 @@ public:
 	bool IsUsernameLoggedin( const string& username);
 	bool IsTokenLoggedin( const string& token);
 
-	void Reap();
+	void Reap(bool purgeall=false);
 	void Purge();
 
 	WebClientPtr GetClientByUsername( const string& username);

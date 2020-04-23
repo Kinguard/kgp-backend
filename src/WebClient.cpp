@@ -111,13 +111,13 @@ void Clients::ReapClient(WebClientPtr wc)
 	this->clients.erase( it );
 }
 
-void Clients::Reap()
+void Clients::Reap(bool purgeall)
 {
 	list<WebClientPtr> toReap;
 
 	for( WebClientPtr client: this->clients )
 	{
-		if( client->Timedout() )
+		if( purgeall || client->Timedout() )
 		{
 			toReap.push_back( client );
 		}
@@ -135,11 +135,7 @@ void Clients::Purge()
 {
 	logg << Logger::Notice << "About to purge all web clients" << lend;
 
-	for( WebClientPtr client: this->clients)
-	{
-		this->ReapClient( client );
-	}
-
+	this->Reap(true);
 }
 
 WebClientPtr Clients::GetClientByUsername(const string &username)
