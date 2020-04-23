@@ -131,6 +131,17 @@ void Clients::Reap()
 	}
 }
 
+void Clients::Purge()
+{
+	logg << Logger::Notice << "About to purge all web clients" << lend;
+
+	for( WebClientPtr client: this->clients)
+	{
+		this->ReapClient( client );
+	}
+
+}
+
 WebClientPtr Clients::GetClientByUsername(const string &username)
 {
 	for( WebClientPtr client: this->clients )

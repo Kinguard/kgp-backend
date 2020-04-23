@@ -138,6 +138,9 @@ private:
 	bool getSysconfigBool(string scope, string key);
 
 	// Lifecycle management
+	void LockBackend();
+	void UnlockBackend();
+	bool islocked; // Used to indicate if backend is locked
 	time_t lastreap;
 	// ONLY call this when not processing a request!
 	void ReapClients();
@@ -155,7 +158,7 @@ private:
 
 	Clients clients;
 
-	// Argumnen checking functionality
+	// Argument checking functionality
 	string typecheckerror;
 	static void typecheckcallback(const string& msg, void* data);
 	JsonHelper::TypeChecker typechecker;

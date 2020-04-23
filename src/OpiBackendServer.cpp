@@ -86,6 +86,7 @@ static vector<TypeChecker::Check> argchecks(
 
 OpiBackendServer::OpiBackendServer(const string &socketpath):
 	Utils::Net::NetServer(UnixStreamServerSocketPtr( new UnixStreamServerSocket(socketpath)), 0),
+	islocked(false),
 	typechecker(argchecks, OpiBackendServer::typecheckcallback)
 {
 	this->actions["login"]=&OpiBackendServer::DoLogin;
@@ -223,9 +224,17 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 		logg << Logger::Debug << "Caught exception on socket read ("<<e.what()<<")"<<lend;
 	}
 
-	// Check and possibly remove clients not active
-	// This is ok since we are guaranteed not to process any client now
-	this->ReapClients();
+	if( this->islocked )
+	{
+		// Backend is locked, make sure no one is logged in
+		this->clients.Purge();
+	}
+	else
+	{
+		// Check and possibly remove clients not active
+		// This is ok since we are guaranteed not to process any client now
+		this->ReapClients();
+	}
 
 	this->decreq();
 
@@ -239,6 +248,12 @@ OpiBackendServer::~OpiBackendServer()
 void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("DoLogin");
+
+	if( this->islocked )
+	{
+		this->SendErrorMessage(client,cmd,503,"Backend locked");
+		return;
+	}
 
 	if( ! this->CheckArguments(client, CHK_USR|CHK_PWD, cmd) )
 	{
@@ -2758,6 +2773,9 @@ void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, J
 		return;
 	}
 
+	// Don't allow usage during upgrade, system must restart when upgrade completes
+	this->LockBackend();
+
 	SystemManager::StartUpgrade();
 
 	this->SendOK(client, cmd);
@@ -2897,6 +2915,18 @@ bool OpiBackendServer::getSysconfigBool(string scope, string key)
 		}
 	}
 	return false;
+}
+
+void OpiBackendServer::LockBackend()
+{
+	ScopedLog l("Lock backend");
+	this->islocked = true;
+}
+
+void OpiBackendServer::UnlockBackend()
+{
+	ScopedLog l("UnLock backend");
+	this->islocked = false;
 }
 
 bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
