@@ -1,3 +1,9 @@
+opi-backend (1.15.2~test1) vili; urgency=medium
+
+  * Implement backend locking to use while system upgrade
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 23 Apr 2020 09:38:46 +0200
+
 opi-backend (1.15.1) vili; urgency=medium
 
   * Only terminate main process upon service termination. Since we
