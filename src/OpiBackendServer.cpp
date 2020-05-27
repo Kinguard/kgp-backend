@@ -9,17 +9,17 @@
 #include <libutils/Regex.h>
 
 #include <libopi/AuthServer.h>
+#include <libopi/CryptoHelper.h>
 #include <libopi/ServiceHelper.h>
 #include <libopi/NetworkConfig.h>
 #include <libopi/SmtpConfig.h>
 #include <libopi/SysInfo.h>
-#include <libopi/ExtCert.h>
 #include <libopi/SysConfig.h>
-#include <libopi/BackupHelper.h>
 
 #include <libopi/JsonHelper.h>
 
 #include <kinguard/IdentityManager.h>
+#include <kinguard/NetworkManager.h>
 #include <kinguard/BackupManager.h>
 #include <kinguard/SystemManager.h>
 #include <kinguard/UserManager.h>
@@ -2249,7 +2249,10 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 		return;
 	}
     string netif = sysinfo.NetworkDevice();
-    Json::Value cfg = NetUtils::NetworkConfig().GetInterface( netif );
+
+	NetworkManager& nm = NetworkManager::Instance();
+
+	Json::Value cfg = nm.GetConfiguration( netif );
 	Json::Value ret;
 	if( cfg["addressing"].asString() == "static" )
 	{
@@ -2257,6 +2260,7 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 		ret["ipnumber"] = cfg["options"]["address"][static_cast<uint>(0)].asString();
 		ret["netmask"] = cfg["options"]["netmask"][static_cast<uint>(0)].asString();
 		ret["gateway"] = cfg["options"]["gateway"][static_cast<uint>(0)].asString();
+		ret["dns"] = cfg["options"]["dns"];
 	}
 	else if( cfg["addressing"].asString() == "dhcp" )
 	{
@@ -2264,21 +2268,16 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
         ret["ipnumber"] = NetUtils::GetAddress( netif );
         ret["netmask"] = NetUtils::GetNetmask( netif );
 		ret["gateway"] = NetUtils::GetDefaultRoute();
+
+		//TODO: This should be handled by NetworkManager
+		NetUtils::ResolverConfig rc;
+		list<string> nss = rc.getNameservers();
+		ret["dns"]=JsonHelper::ToJsonArray(nss);
 	}
 	else
 	{
 		this->SendErrorMessage(client, cmd, 500, "Unknown addressing of network interface");
 		return;
-	}
-
-	NetUtils::ResolverConfig rc;
-
-	list<string> nss = rc.getNameservers();
-
-	ret["dns"]=Json::arrayValue;
-	for( auto ns: nss)
-	{
-		ret["dns"].append(ns);
 	}
 
 	this->SendOK( client, cmd, ret);
@@ -2308,12 +2307,12 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	}
 
     string netif = sysinfo.NetworkDevice();
+	NetworkManager& nm = NetworkManager::Instance();
 
+	bool res;
 	if( type == "dhcp" )
 	{
-		NetUtils::NetworkConfig nc;
-        nc.SetDHCP( netif );
-		nc.WriteConfig();
+		res = nm.DynamicConfiguration( netif );
 	}
 	else
 	{
@@ -2338,29 +2337,15 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 			return;
 		}
 
-		NetUtils::NetworkConfig nc;
-        nc.SetStatic( netif, cmd["ipnumber"].asString(), cmd["netmask"].asString(), cmd["gateway"].asString() );
-		nc.WriteConfig();
-
-		NetUtils::ResolverConfig rc;
-		rc.setDomain("localdomain");
-		rc.setSearch("");
-
-		list<string> nss;
-
-		for(unsigned int i = 0; i < cmd["dns"].size(); i++ )
-		{
-			if( cmd["dns"][i].isString() )
-			{
-				nss.push_back(cmd["dns"][i].asString());
-			}
-		}
-
-		rc.setNameservers( nss );
-		rc.WriteConfig();
+		res = nm.StaticConfiguration( netif,
+								cmd["ipnumber"].asString(),
+								cmd["netmask"].asString(),
+								cmd["gateway"].asString(),
+								JsonHelper::FromJsonArray(cmd["dns"])
+								);
 	}
 
-    if( ! NetUtils::RestartInterface( netif ) )
+	if( ! res )
 	{
 		this->SendErrorMessage( client, cmd, 500, "Failed to restart network");
 		return;
@@ -2640,11 +2625,11 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	// Input data confirmed, move on to verify password.
 
 	string calc_passphrase;
-	SecString spass(mpwd.c_str(), mpwd.size() );
-	SecVector<byte> key = PBKDF2( spass, 20);
+	CryptoHelper::SecString spass(mpwd.c_str(), mpwd.size() );
+	CryptoHelper::SecVector<byte> key = CryptoHelper::PBKDF2( spass, 20);
 	vector<byte> ukey(key.begin(), key.end());
 
-	calc_passphrase = Base64Encode( ukey );
+	calc_passphrase = CryptoHelper::Base64Encode( ukey );
 	// Don't write sensitive data to logfile
 	//logg << Logger::Debug<< "Calculated passphrase: " << calc_passphrase <<lend;
 
