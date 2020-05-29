@@ -2309,6 +2309,17 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
     string netif = sysinfo.NetworkDevice();
 	NetworkManager& nm = NetworkManager::Instance();
 
+	// We currently have no choice but to send the reply now
+	// and assume everything is OK.
+	//
+	// If not we will be disconnected from the client that then
+	// will report an error, even though everything might be ok.
+	//
+	// We should probably do more tests before comitting this operation
+	// since it potentially will lock users out of their system :|
+	//
+	this->SendOK(client, cmd);
+
 	bool res;
 	if( type == "dhcp" )
 	{
@@ -2345,13 +2356,6 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 								);
 	}
 
-	if( ! res )
-	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to restart network");
-		return;
-	}
-
-	this->SendOK(client, cmd);
 }
 
 void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
