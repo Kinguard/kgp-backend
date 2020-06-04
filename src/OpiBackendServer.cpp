@@ -2494,7 +2494,7 @@ void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json
 	tempscript = "/sys/class/thermal/thermal_zone0/temp"; // works on XU4...
 	if ( File::FileExists(tempscript) )
 	{
-		tie(retval,Message)=Process::Exec( "cat " + tempscript );
+		Message = File::GetContentAsString( tempscript );
 		ret["temperature"]=Message;
 	} else {
 		ret["temperature"]=0;
@@ -2802,74 +2802,33 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
 void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Get Packages");
-	list<string> packages,dpkglist;
-    string packagescript, packagelist, ExecOutput, FailedPkgs;
-	bool valid_list=false;
 	Json::Value ret;
-	int retval;
-	Regex r;
 
-	if ( File::FileExists(PACKAGE_INFO) )
+	if( ! File::FileExists(PACKAGE_STATUSFILE) )
 	{
-		packagelist = "";
-		packages = File::GetContent(PACKAGE_INFO);
-		r.Compile("([^0-9a-zA-Z_\\-])");  // do not allow any weird characters i name....
-		for( auto package: packages )
-		{
-			if ( package.length() ) // do not include empty lines
-			{
-				
-				if ( r.DoMatch(package).size() )
-				{
-					logg << Logger::Debug << "PACKAGE NAME NOT SAFE for SHELL: " << package <<lend;
-				} else {
-					//logg << Logger::Debug << "SAFE PACKAGE NAME " << package <<lend;
-					packagelist += " "+package;
-					valid_list= true;
-				}
-				
-			}
-		}
-		if( valid_list )
-		{
-            packagescript = "dpkg -l "+packagelist +" | grep ^ii | awk '{print $2 \" \" $3 \" \" $1}'";
-			tie(retval,ExecOutput)=Process::Exec( packagescript );
-		}
-
-        // Also get packages not correctly installed
-        packagescript = "dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2, $3, $1}'";
-        tie(retval,FailedPkgs)=Process::Exec( packagescript );
-
-        ExecOutput=ExecOutput+FailedPkgs;
-		if (retval)
-		{
-			String::Split(ExecOutput,dpkglist,"\n");
-			for( auto pkg:dpkglist )
-			{
-				vector<string> curr_pkg;
-				String::Split(pkg,curr_pkg," ");
-                if ( curr_pkg.size() == 3 ) {
-                    ret["packages"][curr_pkg[0]] = curr_pkg[1] +"("+curr_pkg[2]+")";
-				}
-				else
-				{
-					logg << Logger::Debug << "Illegal package length " << pkg.length() <<lend;
-				}
-			}
-			
-			this->SendOK(client, cmd, ret);
-		}
-		else
-		{
-			this->SendErrorMessage(client, cmd, 500, "Internal Error");
-		}
-	}
-	else
-	{
-		logg << Logger::Debug << "No package list available"<<lend;
+		// Really should not happen
+		logg << Logger::Error << "Missing package status file"  << lend;
 		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
 		return;
 	}
+
+	string pkgstatus = File::GetContentAsString( PACKAGE_STATUSFILE );
+
+	if( pkgstatus.length() == 0 )
+	{
+		logg << Logger::Error << "Package status file truncated"  << lend;
+		this->SendErrorMessage(client, cmd, 500, "Internal Error (Truncated status file)");
+		return;
+	}
+
+	if( !this->reader.parse(pkgstatus, ret) )
+	{
+		logg << Logger::Error << "Failed to parse status file"  << lend;
+		this->SendErrorMessage(client, cmd, 500, "Internal Error (Failed to parse status file)");
+		return;
+	}
+
+	this->SendOK(client, cmd, ret);
 }
 
 string OpiBackendServer::getSysconfigString(string scope, string key)

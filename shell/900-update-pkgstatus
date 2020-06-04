@@ -1,0 +1,81 @@
+#! /bin/bash
+
+PKGFILE=/etc/opi/packageinfo.conf
+OUT=/var/lib/kinguard/packagestatus.json
+
+. $1/utils.sh
+
+log_debug "Update package info, start"
+
+
+# indent or not
+
+#NL="\n"
+#TB="\t"
+
+NL=""
+TB=""
+
+if [ ! -e "${PKGFILE}" ]
+then
+	log_warn "Package list: ${PKGFILE} not available. Terminating."
+	exit 1
+fi
+
+# Truncate outfile
+echo > $OUT
+
+function out()
+{
+	echo -ne "$@" >> $OUT
+}
+
+# Output header
+out "{\"packages\" : {$NL"
+
+PKGS=$(tr '\n' ' '  < ${PKGFILE})
+
+FIRST=1
+for PKG in $PKGS
+do
+	PINFO=$(dpkg-query -W -f '${Package} ${db:Status-Abbrev} ${version}\n' "${PKG}" 2> /dev/null )
+	if [ $? -ne 0 ]
+	then
+		log_debug "Failed to query pkg: ${PKG}"
+	else
+		NAME=$(echo $PINFO | cut -f1 -d ' ')
+		STAT=$(echo $PINFO | cut -f2 -d ' ')
+		VERS=$(echo $PINFO | cut -f3 -d ' ')
+		if [ $FIRST  -ne 1 ]
+		then
+			out "$TB,"
+		else
+			out "$TB"
+			FIRST=0
+		fi
+		out "\"${NAME}\":\"${VERS} (${STAT})\"$NL"
+	fi
+done
+
+PKGERR=$(dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2, $1, $3}')
+
+while IFS= read -r EPKG
+do
+	NAME=$(echo $EPKG | cut -f1 -d ' ')
+	STAT=$(echo $EPKG | cut -f2 -d ' ')
+	VERS=$(echo $EPKG | cut -f3 -d ' ')
+
+	if [ $FIRST  -ne 1 ]
+	then
+		out "$TB,"
+	else
+		out "$TB"
+		FIRST=0
+	fi
+	out "\"${NAME}\":\"${VERS} (${STAT})\"$NL"
+done <<< "${PKGERR}"
+
+# Output footer
+out "$TB}$NL}\n"
+
+log_debug "Update package info, completed"

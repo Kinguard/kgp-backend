@@ -33,6 +33,7 @@
 #define BACKUP_LINK "/usr/share/opi-backup/link_backup.sh"
 
 #define PACKAGE_INFO "/etc/opi/packageinfo.conf"
+#define PACKAGE_STATUSFILE "/var/lib/kinguard/packagestatus.json"
 
 #define NOTIFY_DIR "/var/spool/kgp-notify/"
 

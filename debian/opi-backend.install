@@ -1,4 +1,5 @@
 shell/disable_shell.sh	/usr/share/opi-backend/
 shell/enable_shell.sh	/usr/share/opi-backend/
 shell/dropbear*.deb	/usr/share/opi-backend/
+shell/900-update-pkgstatus	/usr/share/opi-updates/scripts/post-update/
 packageinfo.conf		/etc/opi/
