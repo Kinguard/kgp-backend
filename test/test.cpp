@@ -4,7 +4,10 @@
 
 #include <libutils/Logger.h>
 
-int main(int argc, char** argv){
+int main(int argc, char** argv)
+{
+	(void) argc;
+	(void) argv;
 	Utils::logg.SetLevel(Utils::Logger::Debug);
 
 	// Get the top level suite from the registry

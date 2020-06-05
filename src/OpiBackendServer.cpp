@@ -2802,7 +2802,7 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
 void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Get Packages");
-	Json::Value ret;
+	Json::Value ret, tmp;
 
 	if( ! File::FileExists(PACKAGE_STATUSFILE) )
 	{
@@ -2821,11 +2821,31 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	if( !this->reader.parse(pkgstatus, ret) )
+	if( !this->reader.parse(pkgstatus, tmp) )
 	{
 		logg << Logger::Error << "Failed to parse status file"  << lend;
 		this->SendErrorMessage(client, cmd, 500, "Internal Error (Failed to parse status file)");
 		return;
+	}
+
+	if( !tmp.isMember("packages") || ! tmp["packages"].isObject() )
+	{
+		logg << Logger::Error << "Malformed statusfile" << lend;
+		this->SendErrorMessage(client, cmd, 500, "Internal Error (Malformed status file)");
+		return;
+	}
+
+
+	for( const auto& member: tmp["packages"].getMemberNames() )
+	{
+		Json::Value pkg = tmp["packages"][member];
+
+		if(pkg["status"].asString() == "un" )
+		{
+			// Skip all uninstalled packages
+			continue;
+		}
+		ret["packages"][member] = pkg["version"].asString() + string(" (")+pkg["status"].asString()+string(")");
 	}
 
 	this->SendOK(client, cmd, ret);
