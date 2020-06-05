@@ -2795,6 +2795,23 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
         logg << Logger::Debug << "No webapps theme set" <<lend;
     }
 
+	if( File::FileExists( KINGUARD_VERSIONFILE ) )
+	{
+		string version =  File::GetContentAsString(KINGUARD_VERSIONFILE);
+		if( version.length() > 0 )
+		{
+			ret["osversion"] = version;
+		}
+		else
+		{
+			ret["osversion"] = "N/A";
+		}
+	}
+	else
+	{
+		ret["osversion"] = "N/A";
+	}
+
     this->SendOK(client, cmd, ret);
 
 }

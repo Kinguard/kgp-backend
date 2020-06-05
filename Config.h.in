@@ -35,6 +35,8 @@
 #define PACKAGE_INFO "/etc/opi/packageinfo.conf"
 #define PACKAGE_STATUSFILE "/var/lib/kinguard/packagestatus.json"
 
+#define KINGUARD_VERSIONFILE "/etc/kinguard/version"
+
 #define NOTIFY_DIR "/var/spool/kgp-notify/"
 
 #define OC_CLEAN_SCRIPT "/etc/opi-control/restore/owncloud-reinstall"
