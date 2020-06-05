@@ -53,7 +53,7 @@ do
 			out "$TB"
 			FIRST=0
 		fi
-		out "\"${NAME}\":\"${VERS} (${STAT})\"$NL"
+		out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
 	fi
 done
 
@@ -72,7 +72,7 @@ do
 		out "$TB"
 		FIRST=0
 	fi
-	out "\"${NAME}\":\"${VERS} (${STAT})\"$NL"
+	out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
 done <<< "${PKGERR}"
 
 # Output footer
