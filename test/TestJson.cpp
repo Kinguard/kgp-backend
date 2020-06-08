@@ -61,9 +61,7 @@ void TestJson::Test()
 
 
 
-	std::cout << ret.toStyledString() << std::endl;
-
-	CPPUNIT_FAIL("HEllo");
+	// std::cout << ret.toStyledString() << std::endl;
 }
 
 
