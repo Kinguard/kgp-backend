@@ -3,6 +3,7 @@
 PKGFILE=/etc/opi/packageinfo.conf
 OUT=/var/lib/kinguard/packagestatus.json
 
+# export LOGLEVEL=8
 . $1/utils.sh
 
 log_debug "Update package info, start"
@@ -59,21 +60,26 @@ done
 
 PKGERR=$(dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2, $1, $3}')
 
-while IFS= read -r EPKG
-do
-	NAME=$(echo $EPKG | cut -f1 -d ' ')
-	STAT=$(echo $EPKG | cut -f2 -d ' ')
-	VERS=$(echo $EPKG | cut -f3 -d ' ')
 
-	if [ $FIRST  -ne 1 ]
-	then
-		out "$TB,"
-	else
-		out "$TB"
-		FIRST=0
-	fi
-	out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
-done <<< "${PKGERR}"
+if [ -n "${PKGERR}" ]
+then
+
+	while IFS= read -r EPKG
+	do
+		NAME=$(echo $EPKG | cut -f1 -d ' ')
+		STAT=$(echo $EPKG | cut -f2 -d ' ')
+		VERS=$(echo $EPKG | cut -f3 -d ' ')
+
+		if [ $FIRST  -ne 1 ]
+		then
+			out "$TB,"
+		else
+			out "$TB"
+			FIRST=0
+		fi
+		out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
+	done <<< "${PKGERR}"
+fi
 
 # Output footer
 out "$TB}$NL}\n"
