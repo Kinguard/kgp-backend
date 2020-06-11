@@ -7,7 +7,9 @@ then
 	exit 1
 fi
 
-dpkg -i /usr/share/opi-backend/dropbear*.deb || exit 1
+ARCH=$(dpkg --print-architecture)
+
+dpkg -i /usr/share/opi-backend/dropbear*_${ARCH}.deb /usr/share/opi-backend/dropbear-run*_all.deb || exit 1
 
 PASSWORD=`/usr/bin/pwgen -n1 12`
 
@@ -16,7 +18,7 @@ echo "root:$PASSWORD" | /usr/sbin/chpasswd || exit 1
 /usr/sbin/sendmail root <<EOF
 Subject: SSH root access enabled
 
-SSH and root has been enabled on OPI.
+SSH and root has been enabled on unit.
 
 Generated password for root is:
 

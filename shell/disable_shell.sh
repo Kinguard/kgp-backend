@@ -14,6 +14,6 @@ dpkg -P dropbear-bin dropbear-run || exit 1
 /usr/sbin/sendmail root <<EOF
 Subject: SSH root access disabled
 
-SSH and root has been disabled on OPI.
+SSH and root has been disabled on unit.
 
 EOF
