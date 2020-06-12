@@ -7,7 +7,9 @@ then
         exit 1
 fi
 
-dpkg -P dropbear-bin dropbear-run || exit 1
+PKGS="dropbear-run dropbear-bin libtomcrypt1 libtommath1"
+
+dpkg -P ${PKGS} || exit 1
 
 /usr/bin/passwd -d root || exit 1
 

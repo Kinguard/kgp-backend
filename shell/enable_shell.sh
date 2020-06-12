@@ -9,7 +9,7 @@ fi
 
 ARCH=$(dpkg --print-architecture)
 
-dpkg -i /usr/share/opi-backend/dropbear*_${ARCH}.deb /usr/share/opi-backend/dropbear-run*_all.deb || exit 1
+dpkg -i /usr/share/opi-backend/*.deb || exit 1
 
 PASSWORD=`/usr/bin/pwgen -n1 12`
 
