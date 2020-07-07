@@ -1,3 +1,59 @@
+opi-backend (1.15.2~test11) vili; urgency=medium
+
+  * Bump dep on debhelper to try get this to build on debian
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 12 Jun 2020 10:36:02 +0200
+
+opi-backend (1.15.2~test10) vili; urgency=medium
+
+  * Add dropbear dependencies and bump compat
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 12 Jun 2020 09:16:21 +0200
+
+opi-backend (1.15.2~test9) vili; urgency=medium
+
+  * Update dropbear pkgs
+  * Add armhf, arm64 and amd64 dropbear pkgs and update scripts
+    #592
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 11 Jun 2020 16:03:31 +0200
+
+opi-backend (1.15.2~test8) vili; urgency=medium
+
+  * If no faulty packages found, dont output empty stansa
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 11 Jun 2020 14:46:33 +0200
+
+opi-backend (1.15.2~test7) vili; urgency=medium
+
+  * Add os version value to system::gettype method
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 05 Jun 2020 13:41:45 +0200
+
+opi-backend (1.15.2~test6) vili; urgency=medium
+
+  * Refactor package status command
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 05 Jun 2020 10:00:33 +0200
+
+opi-backend (1.15.2~test4) vili; urgency=medium
+
+  * Clean up testcode and comit
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 29 May 2020 14:17:26 +0200
+
+opi-backend (1.15.2~test3) vili; urgency=medium
+
+  * Experimental build with tests network settings
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 29 May 2020 13:51:22 +0200
+
+opi-backend (1.15.2~test2) vili; urgency=medium
+
+  * Use new NetworkManager from libkinguard
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 27 May 2020 10:54:54 +0200
+
 opi-backend (1.15.2~test1) vili; urgency=medium
 
   * Implement backend locking to use while system upgrade
