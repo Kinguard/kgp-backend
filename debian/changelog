@@ -1,3 +1,9 @@
+opi-backend (1.15.3~test1) vili; urgency=medium
+
+  * Bump version to be greater than the one in stretch
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 11 Jan 2021 09:15:16 +0100
+
 opi-backend (1.15.2~test11) vili; urgency=medium
 
   * Bump dep on debhelper to try get this to build on debian
