@@ -1,3 +1,9 @@
+opi-backend (1.15.3~test2) vili; urgency=medium
+
+  * Allow regexp/wildcards in packagelist for packages in sw-version
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 26 Feb 2021 11:21:25 +0100
+
 opi-backend (1.15.3~test1) vili; urgency=medium
 
   * Bump version to be greater than the one in stretch

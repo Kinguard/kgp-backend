@@ -39,27 +39,30 @@ PKGS=$(tr '\n' ' '  < ${PKGFILE})
 FIRST=1
 for PKG in $PKGS
 do
-	PINFO=$(dpkg-query -W -f '${Package} ${db:Status-Abbrev} ${version}\n' "${PKG}" 2> /dev/null )
+	PTMP=$(dpkg-query -W -f '${Package} ${db:Status-Abbrev} ${version}\n' "${PKG}" 2> /dev/null )
 	if [ $? -ne 0 ]
 	then
 		log_debug "Failed to query pkg: ${PKG}"
 	else
-		NAME=$(echo $PINFO | cut -f1 -d ' ')
-		STAT=$(echo $PINFO | cut -f2 -d ' ')
-		VERS=$(echo $PINFO | cut -f3 -d ' ')
-		if [ $FIRST  -ne 1 ]
-		then
-			out "$TB,"
-		else
-			out "$TB"
-			FIRST=0
-		fi
-		out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
+		while IFS= read -r PINFO
+		do
+			log_debug "PI: $PINFO"
+			NAME=$(echo $PINFO | cut -f1 -d ' ')
+			STAT=$(echo $PINFO | cut -f2 -d ' ')
+			VERS=$(echo $PINFO | cut -f3 -d ' ')
+			if [ $FIRST  -ne 1 ]
+			then
+				out "$TB,"
+			else
+				out "$TB"
+				FIRST=0
+			fi
+			out "\"${NAME}\":{ \"version\":\"${VERS}\", \"status\": \"${STAT}\"}$NL"
+		done <<< "$PTMP"
 	fi
 done
 
 PKGERR=$(dpkg -l | grep -v ^ii | tail -n +6 | awk '{print $2, $1, $3}')
-
 
 if [ -n "${PKGERR}" ]
 then
