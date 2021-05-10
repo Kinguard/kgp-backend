@@ -130,12 +130,12 @@ private:
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
 
-	bool verifyCertificate( string certificate, string type );
-	string getTmpFile(string path, string suffix);
+	bool verifyCertificate(string certificate, const string& type );
+	string getTmpFile(const string &path, const string &suffix);
 	string BackendLogin(const string& unit_id);
 
-	string getSysconfigString(string scope, string key);
-	bool getSysconfigBool(string scope, string key);
+	string getSysconfigString(const string& scope, const string& key);
+	bool getSysconfigBool(const std::string &scope, const std::string &key);
 
 	// Lifecycle management
 	void LockBackend();
@@ -145,7 +145,7 @@ private:
 	// ONLY call this when not processing a request!
 	void ReapClients();
 
-	Json::Value UserToJson(const KGP::UserPtr user);
+	Json::Value UserToJson(const KGP::UserPtr& user);
 
 	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
 

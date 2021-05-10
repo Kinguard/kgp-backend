@@ -18,9 +18,9 @@ public:
 	virtual ~OpiBackendApp();
 
 protected:
-	void SigTerm(int signo);
-	void SigHup(int signo);
-	void SigPipe(int signo);
+	void SigTerm(int);
+	void SigHup(int);
+	void SigPipe(int);
 
 private:
 	OpiBackendServerPtr server;

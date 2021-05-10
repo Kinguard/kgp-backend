@@ -6,7 +6,7 @@ int main(int argc, char** argv)
 {
 	logg.SetLevel(Logger::Info);
 
-	int ret;
+	int ret = 0;
 	try
 	{
 		OpiBackendApp app;

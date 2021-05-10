@@ -61,10 +61,7 @@ WebClient::~WebClient()
  *
  */
 
-Clients::Clients()
-{
-
-}
+Clients::Clients() = default;
 
 WebClientPtr Clients::CreateNewClient(const string &username, SecopPtr secop)
 {
@@ -85,7 +82,7 @@ bool Clients::IsUsernameLoggedin(const string &username)
 	return find_if(
 				this->clients.begin(),
 				this->clients.end(),
-				[username](WebClientPtr c) { return c->Username() == username; } ) != this->clients.end();
+				[username](const WebClientPtr& c) { return c->Username() == username; } ) != this->clients.end();
 
 }
 
@@ -94,7 +91,7 @@ bool Clients::IsTokenLoggedin(const string &token)
 	return find_if(
 				this->clients.begin(),
 				this->clients.end(),
-				[token](WebClientPtr c) { return c->Token() == token; } ) != this->clients.end();
+				[token](const WebClientPtr& c) { return c->Token() == token; } ) != this->clients.end();
 }
 
 void Clients::ReapClient(WebClientPtr wc)
@@ -115,7 +112,7 @@ void Clients::Reap(bool purgeall)
 {
 	list<WebClientPtr> toReap;
 
-	for( WebClientPtr client: this->clients )
+	for( const WebClientPtr& client: this->clients )
 	{
 		if( purgeall || client->Timedout() )
 		{
@@ -125,7 +122,7 @@ void Clients::Reap(bool purgeall)
 
 	logg << Logger::Debug << "About to reap "<<toReap.size() << " clients of "<< this->clients.size() << " active"<<lend;
 
-	for( WebClientPtr client: toReap )
+	for( const WebClientPtr& client: toReap )
 	{
 		this->ReapClient( client );
 	}
@@ -165,8 +162,5 @@ WebClientPtr Clients::GetClientByToken(const string &token)
 
 }
 
-Clients::~Clients()
-{
-
-}
+Clients::~Clients() = default;
 

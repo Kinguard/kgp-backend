@@ -7,6 +7,7 @@
 #include <libutils/ConfigFile.h>
 #include <libutils/UserGroups.h>
 #include <libutils/Regex.h>
+#include <libutils/HttpStatusCodes.h>
 
 #include <libopi/AuthServer.h>
 #include <libopi/CryptoHelper.h>
@@ -33,6 +34,7 @@
 using namespace OPI;
 using namespace OPI::JsonHelper;
 using namespace KGP;
+using namespace Utils::HTTP;
 
 // Convenience defines
 #define SCFG	(OPI::SysConfig())
@@ -41,27 +43,27 @@ using namespace KGP;
  * Bit patterns for argument checks
  * (A bit uggly but effective)
  */
-#define CHK_USR	0x00000001	// Check username
-#define CHK_PWD	0x00000002	// Check password
-#define CHK_DSP	0x00000004	// Check displayname
-#define CHK_NPW 0x00000008	// Check new password
-#define CHK_GRP 0x00000010	// Check group
-#define CHK_DMN 0x00000020	// Check domain
-#define CHK_ADR 0x00000040	// Check address
-#define CHK_HST 0x00000080  // Check hostname
-#define CHK_IDN 0x00000100  // Check identity
-#define CHK_PRT 0x00000200  // Check port
-#define CHK_EML 0x00000400  // Check email
-#define CHK_SSL 0x00000800  // Check ssl
-#define CHK_TYP 0x00001000  // Check type
-#define CHK_SND 0x00002000  // Check send
-#define CHK_RCV 0x00004000  // Check receive
-#define CHK_DEM 0x00008000  // Check default email
+constexpr int CHK_USR	= 0x00000001;	// Check username
+constexpr int CHK_PWD	= 0x00000002;	// Check password
+constexpr int CHK_DSP	= 0x00000004;	// Check displayname
+constexpr int CHK_NPW	= 0x00000008;	// Check new password
+constexpr int CHK_GRP	= 0x00000010;	// Check group
+constexpr int CHK_DMN	= 0x00000020;	// Check domain
+constexpr int CHK_ADR	= 0x00000040;	// Check address
+constexpr int CHK_HST	= 0x00000080;  // Check hostname
+constexpr int CHK_IDN	= 0x00000100;  // Check identity
+constexpr int CHK_PRT	= 0x00000200;  // Check port
+constexpr int CHK_EML	= 0x00000400;  // Check email
+constexpr int CHK_SSL	= 0x00000800;  // Check ssl
+constexpr int CHK_TYP	= 0x00001000;  // Check type
+constexpr int CHK_SND	= 0x00002000;  // Check send
+constexpr int CHK_RCV	= 0x00004000;  // Check receive
+constexpr int CHK_DEM	= 0x00008000;  // Check default email
 
-#define CHK_ORIGID	0x00010000  // Check original identity
-#define CHK_ORIGHST 0x00020000  // Check original hostname
+constexpr int CHK_ORIGID	= 0x00010000;  // Check original identity
+constexpr int CHK_ORIGHST	= 0x00020000; // Check original hostname
 
-static vector<TypeChecker::Check> argchecks(
+static const vector<TypeChecker::Check> argchecks(
 	{
 			{ CHK_USR, "username",		TypeChecker::Type::STRING },
 			{ CHK_PWD, "password",		TypeChecker::STRING },
@@ -174,7 +176,7 @@ OpiBackendServer::OpiBackendServer(const string &socketpath):
 	this->lastreap = time(nullptr);
 }
 
-#define BUFSIZE (64*1024)
+constexpr static int32_t BUFSIZE = (64*1024);
 
 void OpiBackendServer::Dispatch(SocketPtr con)
 {
@@ -184,7 +186,7 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 	UnixStreamClientSocketPtr sock = static_pointer_cast<UnixStreamClientSocket>(con);
 
 	char buf[BUFSIZE];
-	size_t rd, rd_total=0;
+	size_t rd = 0, rd_total=0;
 	int retries = 5;
 
 	try
@@ -240,10 +242,7 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 
 }
 
-OpiBackendServer::~OpiBackendServer()
-{
-
-}
+OpiBackendServer::~OpiBackendServer() = default;
 
 void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
@@ -251,7 +250,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 	if( this->islocked )
 	{
-		this->SendErrorMessage(client,cmd,503,"Backend locked");
+		this->SendErrorMessage(client,cmd,Status::ServiceUnavailable,"Backend locked");
 		return;
 	}
 
@@ -274,13 +273,13 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 			if( ! secop )
 			{
 				logg << Logger::Error << "Missing connection to secop"<<lend;
-				this->SendErrorMessage(client, cmd, 500, "Failed connecting to backing store");
+				this->SendErrorMessage(client, cmd, Status::InternalServerError, "Failed connecting to backing store");
 				return;
 			}
 
 			if( ! secop->PlainAuth(username, password)  )
 			{
-				this->SendErrorMessage(client, cmd, 400, "Failed");
+				this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 				return;
 			}
 
@@ -298,7 +297,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 			// Todo, fix generic cleanup.
 
-			this->SendErrorMessage(client, cmd, 400, "Failed");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 		}
 
 		return;
@@ -308,7 +307,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		SecopPtr secop(new Secop() );
 		if( ! secop->PlainAuth(username,password) )
 		{
-			this->SendErrorMessage(client, cmd, 400, "Failed");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 			return;
 		}
 
@@ -340,7 +339,7 @@ void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::V
 	SecopPtr secop(new Secop() );
 	if( ! secop->PlainAuth(username,password) )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 		return;
 	}
 
@@ -373,7 +372,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 
 	if( ! umgr->AddUser(user,pass, display, false) )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 		return;
 	}
 
@@ -403,7 +402,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	if( user == wc->Username() )
 	{
 		// Not allowed to comit suicide
-		this->SendErrorMessage(client, cmd, 403, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Forbidden, "Not allowed");
 		return;
 	}
 
@@ -412,7 +411,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	if( ! umgr->DeleteUser(user) )
 	{
 		logg << Logger::Notice << "Failed to remove user: "<< umgr->StrError()<<lend;
-		this->SendErrorMessage(client, cmd, 400, "Failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
 		return;
 	}
 
@@ -445,7 +444,7 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 	if( ! usr )
 	{
 		logg << Logger::Notice << "User not found: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Not found");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Not found");
 		return;
 	}
 
@@ -563,7 +562,7 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 	if( ! usr )
 	{
 		logg <<  Logger::Notice << "Retrieve user failed: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -573,7 +572,7 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 	if( ! umgr->UpdateUser( usr ) )
 	{
 		logg <<  Logger::Notice << "Update user failed: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -599,9 +598,9 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 
 	Json::Value ret;
 	ret["users"]=Json::arrayValue;
-	for(auto user: users)
+	for(const auto& user: users)
 	{
-		ret["users"].append( this->UserToJson( user) );
+		ret["users"].append( this->UserToJson( user ) );
 	}
 
 	this->SendOK(client, cmd, ret);
@@ -632,7 +631,7 @@ void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::
 
 	Json::Value ret;
 	ret["groups"]=Json::arrayValue;
-	for(auto group: groups)
+	for(const auto& group: groups)
 	{
 		ret["groups"].append( group );
 	}
@@ -673,7 +672,7 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 	if( ! umgr->UpdateUserPassword( user, newps, passw ) )
 	{
 		logg << Logger::Notice << "Failed to update user password: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -690,7 +689,7 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 
 	Json::Value ret;
 	ret["groups"]=Json::arrayValue;
-	for(auto group: groups)
+	for(const auto& group: groups)
 	{
 		ret["groups"].append( group );
 	}
@@ -722,7 +721,7 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	if( !umgr->AddGroup(group) )
 	{
 		logg << Logger::Notice << "Failed to add group: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -753,7 +752,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	if( !umgr->AddGroupMember(group, member) )
 	{
 		logg << Logger::Notice << "Failed to add member to group: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -764,14 +763,14 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 		if( ! mmgr.AddToAdmin( member ) )
 		{
 			logg << Logger::Error << "Failed to add user to admin mail: "<< mmgr.StrError() << lend;
-			this->SendErrorMessage(client, cmd, 400, "Operation failed");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 			return;
 		}
 
 		if( ! mmgr.Synchronize() )
 		{
 			logg << Logger::Error << "Failed to synchronize mail settings: "<< mmgr.StrError() << lend;
-			this->SendErrorMessage(client, cmd, 500, "Operation failed");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 			return;
 		}
 	}
@@ -804,7 +803,7 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 	Json::Value ret;
 	ret["members"]=Json::arrayValue;
 
-	for( auto member: members)
+	for( const auto& member: members)
 	{
 		ret["members"].append(member);
 	}
@@ -835,7 +834,7 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	if( !umgr->DeleteGroup(group) )
 	{
 		logg << Logger::Notice << "Failed to delete group: " << umgr->StrError() << lend;
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -864,7 +863,7 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 
 	if( ( group == "admin" ) && ( member == wc->Username() ) )
 	{
-		this->SendErrorMessage(client, cmd, 403, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Forbidden, "Not allowed");
 		return;
 	}
 
@@ -873,7 +872,7 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 
 	if( !umgr->DeleteGroupMember(group, member) )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 		return;
 	}
 
@@ -884,14 +883,14 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 		if( ! mmgr.RemoveFromAdmin( member ) )
 		{
 			logg << Logger::Error << "Failed to add user to admin mail: "<< mmgr.StrError() << lend;
-			this->SendErrorMessage(client, cmd, 400, "Operation failed");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Operation failed");
 			return;
 		}
 
 		if( ! mmgr.Synchronize() )
 		{
 			logg << Logger::Error << "Failed to synchronize mail settings: "<< mmgr.StrError() << lend;
-			this->SendErrorMessage(client, cmd, 500, "Operation failed");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 			return;
 		}
 	}
@@ -916,7 +915,7 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	}
 	else
 	{
-		this->SendErrorMessage(client, cmd, 400, "Bad request");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Bad request");
 		return;
 	}
 
@@ -924,11 +923,11 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	sleep(3);
 	if( action == "shutdown")
 	{
-		system("/sbin/poweroff");
+		tie(std::ignore, std::ignore) = Process::Exec("/sbin/poweroff");
 	}
 	else if( action == "reboot" )
 	{
-		system("/sbin/reboot");
+		tie(std::ignore, std::ignore) = Process::Exec("/sbin/reboot");
 	}
 }
 
@@ -951,7 +950,7 @@ void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json:
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
     }
@@ -983,7 +982,7 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
     }
@@ -997,7 +996,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 {
 	Json::Value res(Json::objectValue);
 	string backend,key;
-    bool enabled;
+	bool enabled = false;
     string type, bucket;
     SysConfig sysconfig;
 
@@ -1023,7 +1022,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
     }
@@ -1031,12 +1030,9 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 
     logg << Logger::Error << "Backend: " << backend <<lend;
     res["enabled"] = enabled;
+	res["location"] = "op"; //Default if backend == s3op or unknown value
 
-    if(backend == "s3op://")
-    {
-        res["location"] = "op";
-    }
-    else if (backend == "local://")
+	if (backend == "local://")
     {
         res["location"] = "local";
     }
@@ -1044,11 +1040,8 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     {
         res["location"] = "amazon";
     }
-    else
-    {
-		res["location"] = "op";  // Show as default target in UI
-    }
-    res["type"] = type;
+
+	res["type"] = type;
     res["AWSbucket"] = bucket;
 
 
@@ -1122,7 +1115,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to set config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to set config parameters");
         logg << Logger::Error << "Failed to write sysconfig" << e.what() << lend;
         return;
     }
@@ -1148,12 +1141,19 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 	string jsonMessage;
 	Json::Reader reader;
 	Json::Value parsedFromString;
-	bool parsingSuccessful;
 
 	tie(ignore,jsonMessage) = Process::Exec( BACKUP_GET_QUOTA );
 
-	parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
-	this->SendOK(client, cmd, parsedFromString);
+	bool parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
+
+	if( parsingSuccessful )
+	{
+		this->SendOK(client, cmd, parsedFromString);
+	}
+	else
+	{
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Read quota failed");
+	}
 }
 
 void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
@@ -1166,7 +1166,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 	}
 
 	Json::Value res(Json::objectValue);
-	struct stat filestatus;
+	struct stat filestatus = {};
 	string log;
 
 	if( File::FileExists( BACKUP_ALERT ))
@@ -1221,7 +1221,7 @@ void OpiBackendServer::DoBackupStartBackup(UnixStreamClientSocketPtr &client, Js
 	{
 		if( ! BackupManager::StartBackup() )
 		{
-			this->SendErrorMessage(client, cmd, 500, "Failed to start backup");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Failed to start backup");
 			return;
 		}
 	}
@@ -1244,7 +1244,7 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 
 	Json::Value res(Json::objectValue);
 	res["domains"]=Json::arrayValue;
-	for( auto domain: domains )
+	for( const auto& domain: domains )
 	{
 		res["domains"].append(domain);
 	}
@@ -1274,7 +1274,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 	if( ! mmgr.Synchronize() )
 	{
 		logg << Logger::Error << "Failed to synchronize mail manager: " << mmgr.StrError() << lend;
-		this->SendErrorMessage( client, cmd, 500, "Failed to add domain");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to add domain");
 		return;
 	}
 
@@ -1315,7 +1315,7 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 		{
 			if( get<1>(address) != user )
 			{
-				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				this->SendErrorMessage( client, cmd, Status::Forbidden, "Not allowed");
 				return;
 			}
 		}
@@ -1327,7 +1327,7 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 	if( !mmgr.Synchronize() )
 	{
 		logg << Logger::Error << "Failed to synchronize mailmanager: " << mmgr.StrError() << lend;
-		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to reload mailserver");
 	}
 	else
 	{
@@ -1403,7 +1403,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 	if( !admin && ( user != username ) )
 	{
 		// If not admin you only can add/update mail addressed to yourself
-		this->SendErrorMessage( client, cmd, 403, "Not allowed");
+		this->SendErrorMessage( client, cmd, Status::Forbidden, "Not allowed");
 		return;
 	}
 
@@ -1420,7 +1420,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 
 			if( user != localuser )
 			{
-				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				this->SendErrorMessage( client, cmd, Status::Forbidden, "Not allowed");
 				return;
 
 			}
@@ -1435,7 +1435,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 	}
 	else
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to reload mailserver");
 	}
 }
 
@@ -1472,7 +1472,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 
 			if( user != localuser )
 			{
-				this->SendErrorMessage( client, cmd, 403, "Not allowed");
+				this->SendErrorMessage( client, cmd, Status::Forbidden, "Not allowed");
 				return;
 
 			}
@@ -1487,7 +1487,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 	}
 	else
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to reload mailserver");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to reload mailserver");
 	}
 }
 
@@ -1590,7 +1590,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		if( conf.host == "" )
 		{
 			logg << Logger::Debug<< "No relay host specified"<<lend;
-			this->SendErrorMessage(client, cmd, 400, "No relay host specified");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "No relay host specified");
 			return;
 		}
 
@@ -1601,7 +1601,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	else
 	{
 		logg << Logger::Debug << "Missing smtp type"<<lend;
-		this->SendErrorMessage(client, cmd, 400, "Missing type argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing type argument");
 		return;
 	}
 
@@ -1613,7 +1613,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	else
 	{
 		logg << Logger::Error << "Failed to update smtp settings: " << mmgr.StrError() << lend;
-		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 	}
 }
 
@@ -1688,7 +1688,7 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 	}
 	else
 	{
-		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Unauthorized, "Not allowed");
 	}
 }
 
@@ -1715,7 +1715,7 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 
 	if( ! this->isAdminOrUser(cmd["token"].asString(), user) )
 	{
-		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Unauthorized, "Not allowed");
 		return;
 	}
 
@@ -1730,7 +1730,7 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 	else
 	{
 		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
-		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 	}
 }
 
@@ -1763,7 +1763,7 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 
 	if( ! this->isAdminOrUser( token, user) )
 	{
-		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Unauthorized, "Not allowed");
 		return;
 	}
 
@@ -1797,7 +1797,7 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 	else
 	{
 		logg << Logger::Error << "Failed to add fetchmail account: "<< mmgr.StrError() << lend;
-		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 	}
 }
 
@@ -1825,7 +1825,7 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 
 	if( ! this->isAdminOrUser( token, account["username"] ) )
 	{
-		this->SendErrorMessage(client, cmd, 401, "Not allowed");
+		this->SendErrorMessage(client, cmd, Status::Unauthorized, "Not allowed");
 		return;
 	}
 
@@ -1838,7 +1838,7 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 	else
 	{
 		logg << Logger::Error << "Failed to delete fetchmail account: "<< mmgr.StrError() << lend;
-		this->SendErrorMessage(client, cmd, 500, "Operation failed");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Operation failed");
 	}
 }
 
@@ -1861,7 +1861,7 @@ void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client,
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
     }
@@ -1898,7 +1898,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
     }
     list<string> ports = Utils::String::Split(forwardports," ");
@@ -1926,7 +1926,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     }
 
     forwardports = "";
-    for (std::list<string>::iterator it=ports.begin(); it!=ports.end(); ++it)
+	for (auto it=ports.begin(); it!=ports.end(); ++it)
     {
         if (it != ports.begin())
         {
@@ -1941,7 +1941,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     }
     catch (std::runtime_error& e)
     {
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
     }
@@ -1972,7 +1972,7 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 	}
     catch (std::runtime_error& e)
 	{
-        this->SendErrorMessage( client, cmd, 500, "Failed to read config parameters");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
         logg << Logger::Error << "Failed to read sysconfig" << e.what() << lend;
         return;
 	}
@@ -2022,7 +2022,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		// if the domain is in the available domains, check that the full FQDN is available
 		if ( ! idmgr.DnsNameAvailable(hostname,domain) )
 		{
-			this->SendErrorMessage( client, cmd, 401, "FQDN not available");
+			this->SendErrorMessage( client, cmd, Status::Unauthorized, "FQDN not available");
 			logg << Logger::Error << "FQDN not available: " << hostname << "@" << domain << lend;
 			return;
 		}
@@ -2040,7 +2040,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		idmgr.DisableDNS();
 	}
 
-	bool updatename;
+	bool updatename = false;
 	if( (hostname == oldopiname) && (olddomain == domain) ) {
 		// if we use a custom cert, always generate make sure the cert is written
 		updatename = false;
@@ -2058,7 +2058,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		updatename = true;
 		if ( !idmgr.SetFqdn(hostname,domain) )
 		{
-			this->SendErrorMessage( client, cmd, 500, "Failed to set hostname/domain config parameters");
+			this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to set hostname/domain config parameters");
 			logg << Logger::Error << "Failed to set hostname/domain config parameters" << lend;
 			return;
 		}
@@ -2069,7 +2069,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		logg << Logger::Info << "Update DNS" << lend;
 		if( ! idmgr.AddDnsName(hostname,domain) )
 		{
-			this->SendErrorMessage( client, cmd, 400, "Failed to register new name/domain");
+			this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to register new name/domain");
 			return;
 		}
 	}
@@ -2080,7 +2080,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	logg << Logger::Info << "Generate certificates" << lend;
 	if ( !idmgr.CreateCertificate(updatename,certtype) )
 	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to generate certificate(s)");
+		this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to generate certificate(s)");
 		return;
 	}
 
@@ -2096,15 +2096,15 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 			logg << Logger::Debug << "Combination of certs not valid" << lend;
 			if ( valid_cert )
 			{
-				this->SendErrorMessage( client, cmd, 400, "Failed to verify Private Key, possibly missing file or uploaded data.");
+				this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to verify Private Key, possibly missing file or uploaded data.");
 			}
 			else if ( valid_key )
 			{
-				this->SendErrorMessage( client, cmd, 400, "Failed to verify Certificate");
+				this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to verify Certificate");
 			}
 			else
 			{
-				this->SendErrorMessage( client, cmd, 400, "Failed to verify certificate and key");
+				this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to verify certificate and key");
 			}
 			return;
 		}
@@ -2113,7 +2113,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		logg << Logger::Debug << "Certificates seem to be Valid" << lend;
 
 		string retmsg;
-		bool retval;
+		bool retval = false;
 		tie(retval,retmsg) = idmgr.WriteCustomCertificate(key,certificate);
 		if ( retval )
 		{
@@ -2124,7 +2124,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 		}
 		else
 		{
-			this->SendErrorMessage( client, cmd, 500, retmsg);
+			this->SendErrorMessage( client, cmd, Status::InternalServerError, retmsg);
 		}
 
 
@@ -2176,7 +2176,7 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	}
 	else
 	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to read certificate type from sysconfig");
+		this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to read certificate type from sysconfig");
 	}
 
 
@@ -2225,16 +2225,14 @@ void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Jso
 	string type = cmd["type"].asString();
 	string certificate = cmd["CertVal"].asString();
 	
-	bool res;
-
-	res = this->verifyCertificate(certificate,type);
+	bool res = this->verifyCertificate(certificate,type);
 	if ( res )
 	{
 		this->SendOK( client, cmd);
 	}
 	else
 	{
-		this->SendErrorMessage( client, cmd, 400, "Failed to verify certificate/key");
+		this->SendErrorMessage( client, cmd, Status::BadRequest, "Failed to verify certificate/key");
 	}
 
 }
@@ -2276,7 +2274,7 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	}
 	else
 	{
-		this->SendErrorMessage(client, cmd, 500, "Unknown addressing of network interface");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Unknown addressing of network interface");
 		return;
 	}
 
@@ -2295,14 +2293,14 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	// Manually verify
 	if( !cmd.isMember("type") && !cmd["type"].isString() )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 
 	string type = cmd["type"].asString();
 	if( type != "dhcp" && type != "static")
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 
@@ -2320,7 +2318,7 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	//
 	this->SendOK(client, cmd);
 
-	bool res;
+	bool res = false;
 	if( type == "dhcp" )
 	{
 		res = nm.DynamicConfiguration( netif );
@@ -2329,22 +2327,22 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	{
 		if( !cmd.isMember("ipnumber") && !cmd["ipnumber"].isString() )
 		{
-			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
 		if( !cmd.isMember("netmask") && !cmd["netmask"].isString() )
 		{
-			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
 		if( !cmd.isMember("gateway") && !cmd["gateway"].isString() )
 		{
-			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
 		if( !cmd.isMember("dns") && !cmd["dns"].isArray() )
 		{
-			this->SendErrorMessage(client, cmd, 400, "Missing argument");
+			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
 
@@ -2354,6 +2352,11 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 								cmd["gateway"].asString(),
 								JsonHelper::FromJsonArray(cmd["dns"])
 								);
+	}
+
+	if( ! res )
+	{
+		logg << Logger::Notice << "Failed to set network settings" << lend;
 	}
 
 }
@@ -2382,12 +2385,12 @@ void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Va
 		return;
 	}
 
-	bool ret;
+	bool ret = false;
 	tie(ret, std::ignore) = Process::Exec("/usr/share/opi-backend/enable_shell.sh");
 
 	if( ! ret )
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to enable shell");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to enable shell");
 		return;
 	}
 
@@ -2404,12 +2407,12 @@ void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::V
 	}
 
 
-	bool ret;
+	bool ret = false;
 	tie(ret, std::ignore) = Process::Exec( "/usr/share/opi-backend/disable_shell.sh" );
 
 	if( !ret )
 	{
-		this->SendErrorMessage( client, cmd, 500, "Failed to disable shell");
+		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to disable shell");
 		return;
 	}
 
@@ -2442,7 +2445,7 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 	else
 	{
 		logg << Logger::Debug << "Spool dir does not exist"<<lend;
-		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
+		this->SendErrorMessage(client, cmd, Status::MethodNotAllowed, "Method not Allowed");
 		return;
 	}
 	Json::Value ret;
@@ -2457,13 +2460,13 @@ void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Jso
 	
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
-		this->SendErrorMessage(client, cmd, 404, "Forbidden");
+		this->SendErrorMessage(client, cmd, Status::Forbidden, "Forbidden");
 		return;
 	}
 	// Manually verify
 	if( !cmd.isMember("id") && !cmd["id"].isString() )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 	logg << Logger::Debug << "Ack message with id: " << cmd["id"].asString() <<lend;
@@ -2479,7 +2482,7 @@ void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json
 	ScopedLog l("Do System Get Status");
 	Json::Value ret;
 	string Message, uptimescript, tempscript;
-	int retval;
+	int retval = 0;
 
 	uptimescript ="/usr/bin/uptime -p";
 	tie(retval,Message)=Process::Exec( uptimescript );
@@ -2509,11 +2512,11 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 	string ExecOutput, storagescript;
 	vector<string> storage;
 	
-	int retval;
+	int retval = 0;
 	
 	// prints only the line with the data partition and in the order of "total, used, available" in 1k blocks
 
-    storagescript ="df -l | grep \""+String::Trimmed(SysConfig().GetKeyAsString("filesystem","storagemount"),"/")+"\" | awk '{print $2 \" \" $3 \" \" $4}'";
+	storagescript ="df -l | grep \""+String::Trimmed(SysConfig().GetKeyAsString("filesystem","storagemount"),"/")+R"(" | awk '{print $2 " " $3 " " $4}')";
 	tie(retval,ExecOutput)=Process::Exec( storagescript );
 	if ( retval )
 	{
@@ -2527,7 +2530,7 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 	}
 	else
 	{
-		this->SendErrorMessage(client, cmd, 500, "Internal Error");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error");
 	}
 		
 }
@@ -2579,17 +2582,17 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	// Manually verify passed parameters
 	if( !cmd.isMember("unitid") && !cmd["unitid"].isString() )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 	if( !cmd.isMember("mpwd") && !cmd["mpwd"].isString() )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 	if( !cmd.isMember("enabled") && !cmd["enabled"].isBool() )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 
@@ -2602,12 +2605,12 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	list<string> authdata = File::GetContent(authfile);
 	if ( authfile == "" ){
 		logg << Logger::Info<< "No backup authfile found, unable to verify MPWD: " <<lend;
-		this->SendErrorMessage(client, cmd, 400, "Unable to verify Master Password");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Unable to verify Master Password");
 		return;
 	}
 
 	// Find the passphrase
-	for( auto authline: authdata )
+	for( const auto& authline: authdata )
 	{
 		list<string> data = String::Split(authline,":");
 		if ( data.front() == "fs-passphrase")
@@ -2622,7 +2625,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	if( ! passphrasefound )
 	{
 		logg << Logger::Info<< "No backup passphrase found, unable to verify MPWD: " <<lend;
-		this->SendErrorMessage(client, cmd, 400, "Unable to verify Master Password");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Unable to verify Master Password");
 		return;
 	}
 
@@ -2640,7 +2643,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	if ( passphrase != calc_passphrase)
 	{
 		logg << Logger::Info<< "Incorrect Master Password" <<lend;
-		this->SendErrorMessage(client, cmd, 403, "Incorrect Master Password");
+		this->SendErrorMessage(client, cmd, Status::Forbidden, "Incorrect Master Password");
 		return;
 	}
 
@@ -2653,14 +2656,14 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		idmgr.EnableDnsProvider("OpenProducts");
 
 		// Try to login and set system keys
-		bool status;
+		bool status = false;
 		string token;
 
 		tie(status,token) = idmgr.UploadKeys(unitid,mpwd);
 
 		if (! status) {
 			logg << Logger::Error<< "Failed to upload keys" <<lend;
-			this->SendErrorMessage(client, cmd, 500, "Failed to upload keys");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Failed to upload keys");
 			return;
 		}
 		try
@@ -2674,7 +2677,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		catch ( std::runtime_error& err )
 		{
 			logg << Logger::Error<< "Failed to set keys in sysconfig: " << err.what() <<lend;
-			this->SendErrorMessage(client, cmd, 500, "Failed to set keys in sysconfig");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Failed to set keys in sysconfig");
 			return;
 		}
 
@@ -2689,7 +2692,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 				// OP servers so that it will fail next time to make user aware that
 				// backups do not work anymore.
 				OPI::BackupHelperPtr backuphelper;
-				backuphelper = BackupHelperPtr( new BackupHelper( "" ) );
+				backuphelper = std::make_shared<BackupHelper>( "" );
 				backuphelper->UmountRemote();
 			}
 			sysconfig.PutKey("hostinfo","unitidbak",unitid);
@@ -2702,7 +2705,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 		catch ( std::runtime_error& err )
 		{
 			logg << Logger::Error<< "Failed to disabled keys in sysconfig: " << err.what() <<lend;
-			this->SendErrorMessage(client, cmd, 500, "Failed to disable keys in sysconfig");
+			this->SendErrorMessage(client, cmd, Status::InternalServerError, "Failed to disable keys in sysconfig");
 			return;
 		}
 	}
@@ -2720,7 +2723,7 @@ void OpiBackendServer::DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	SystemManager::StartUpdate();
+	SystemManager::Instance().StartUpdate();
 
 	this->SendOK(client, cmd);
 }
@@ -2735,10 +2738,10 @@ void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 
-	bool upgradeavailable;
+	bool upgradeavailable = false;
 	string description;
 
-	tie(upgradeavailable, description) = SystemManager::UpgradeAvailable();
+	tie(upgradeavailable, description) = SystemManager::Instance().UpgradeAvailable();
 
 	Json::Value res(Json::objectValue);
 
@@ -2765,7 +2768,7 @@ void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, J
 	// Don't allow usage during upgrade, system must restart when upgrade completes
 	this->LockBackend();
 
-	SystemManager::StartUpgrade();
+	SystemManager::Instance().StartUpgrade();
 
 	this->SendOK(client, cmd);
 }
@@ -2776,11 +2779,8 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
     ScopedLog l("Do System Get Type");
     Json::Value ret;
 
-	size_t type;
-    string typeText;
-
-    type=OPI::sysinfo.Type();
-    typeText=OPI::sysinfo.SysTypeText[type];
+	size_t type=OPI::sysinfo.Type();
+	string typeText=OPI::sysinfo.SysTypeText[type];
 
 	ret["type"]=Json::Int(type);
     ret["typeText"]=typeText;
@@ -2825,7 +2825,7 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 	{
 		// Really should not happen
 		logg << Logger::Error << "Missing package status file"  << lend;
-		this->SendErrorMessage(client, cmd, 405, "Method not Allowed");
+		this->SendErrorMessage(client, cmd, Status::MethodNotAllowed, "Method not Allowed");
 		return;
 	}
 
@@ -2834,21 +2834,21 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 	if( pkgstatus.length() == 0 )
 	{
 		logg << Logger::Error << "Package status file truncated"  << lend;
-		this->SendErrorMessage(client, cmd, 500, "Internal Error (Truncated status file)");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error (Truncated status file)");
 		return;
 	}
 
 	if( !this->reader.parse(pkgstatus, tmp) )
 	{
 		logg << Logger::Error << "Failed to parse status file"  << lend;
-		this->SendErrorMessage(client, cmd, 500, "Internal Error (Failed to parse status file)");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error (Failed to parse status file)");
 		return;
 	}
 
 	if( !tmp.isMember("packages") || ! tmp["packages"].isObject() )
 	{
 		logg << Logger::Error << "Malformed statusfile" << lend;
-		this->SendErrorMessage(client, cmd, 500, "Internal Error (Malformed status file)");
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error (Malformed status file)");
 		return;
 	}
 
@@ -2868,7 +2868,7 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 	this->SendOK(client, cmd, ret);
 }
 
-string OpiBackendServer::getSysconfigString(string scope, string key)
+string OpiBackendServer::getSysconfigString(const string& scope, const string& key)
 {
 	if ( SysConfig().HasKey(scope,key) )
 	{
@@ -2885,7 +2885,7 @@ string OpiBackendServer::getSysconfigString(string scope, string key)
 	return "";
 }
 
-bool OpiBackendServer::getSysconfigBool(string scope, string key)
+bool OpiBackendServer::getSysconfigBool(const string& scope, const string& key)
 {
 	if ( SysConfig().HasKey(scope,key) )
 	{
@@ -2918,7 +2918,7 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 {
 	if( !req.isMember("token") && !req["token"].isString() )
 	{
-		this->SendErrorMessage(client, req, 400, "Missing argument");
+		this->SendErrorMessage(client, req, Status::BadRequest, "Missing argument");
 		return false;
 	}
 
@@ -2926,7 +2926,7 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 
 	if( ! this->clients.IsTokenLoggedin( token ) )
 	{
-		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		this->SendErrorMessage(client, req, Status::Unauthorized, "Unauthorized");
 		return false;
 	}
 
@@ -2940,7 +2940,7 @@ bool OpiBackendServer::CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Val
 
 	if( ! this->isAdmin( token ) )
 	{
-		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		this->SendErrorMessage(client, req, Status::Unauthorized, "Unauthorized");
 		return false;
 	}
 	return true;
@@ -2961,7 +2961,7 @@ bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Jso
 
 	if( ! this->isAdminOrUser( token, user ) )
 	{
-		this->SendErrorMessage(client, req, 401, "Unauthorized");
+		this->SendErrorMessage(client, req, Status::Unauthorized, "Unauthorized");
 		return false;
 	}
 	return true;
@@ -2990,18 +2990,19 @@ string OpiBackendServer::BackendLogin(const string &unit_id)
 {
 	AuthServer s( unit_id);
 
-	int resultcode;
+	int resultcode = 0;
 	Json::Value ret;
 
 	tie(resultcode, ret) = s.Login();
 
-	return resultcode == 200 ? ret["token"].asString() : "";
+	return resultcode == Status::Ok ? ret["token"].asString() : "";
 }
 
 void OpiBackendServer::ReapClients()
 {
 	// Only reap once a minute
-	if( this->lastreap + 60 > time(nullptr) )
+	constexpr int MINUTE = 60;
+	if( this->lastreap + MINUTE > time(nullptr) )
 	{
 		return;
 	}
@@ -3013,7 +3014,7 @@ void OpiBackendServer::ReapClients()
 	this->lastreap = time(nullptr);
 }
 
-Json::Value OpiBackendServer::UserToJson(const UserPtr user)
+Json::Value OpiBackendServer::UserToJson(const UserPtr& user)
 {
 
 	Json::Value ret;
@@ -3085,7 +3086,7 @@ void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Val
 	// Append any possible extra values to answer
 	if( ! val.isNull() )
 	{
-		for( auto x: val.getMemberNames() )
+		for( const auto &x: val.getMemberNames() )
 		{
 			ret[x]=val[x];
 		}
@@ -3104,13 +3105,13 @@ bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int wha
 {
 	if( ! this->typechecker.Verify(what, cmd) )
 	{
-		this->SendErrorMessage(client, cmd, 400, "Missing argument");
+		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return false;
 	}
 	return true;
 }
 
-bool OpiBackendServer::verifyCertificate(string cert, string type)
+bool OpiBackendServer::verifyCertificate(string cert, const string& type)
 {
 	logg << Logger::Debug << "Verify Certificate" << lend;
 
@@ -3152,7 +3153,7 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 		if ( type == "key" )
 		{
 			logg << Logger::Debug << "Checking supplied key" << lend;
-			File::Write( tmpFile, cert, 0600);		
+			File::Write( tmpFile, cert, File::UserRW);
 			opensslscript ="openssl rsa -check -noout -in " + tmpFile;
 			tie(retval,Message)=Process::Exec( opensslscript );
 			if ( File::FileExists( tmpFile) )
@@ -3173,7 +3174,7 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 			while ((pos = cert.find(delimiter)) != std::string::npos) {
 				count++;
 			    token = cert.substr(0, pos+delimiter.length());
-				File::Write( tmpSplitCert, token, 0600);		
+				File::Write( tmpSplitCert, token, File::UserRW);
 			    cert.erase(0, pos+delimiter.length());
 				opensslscript ="openssl x509 -text -noout -in " + tmpSplitCert;
 				tie(sslret,Message)=Process::Exec( opensslscript );
@@ -3196,13 +3197,15 @@ bool OpiBackendServer::verifyCertificate(string cert, string type)
 
 	return retval;
 }
-string OpiBackendServer::getTmpFile(string path,string suffix)
+string OpiBackendServer::getTmpFile(const string& path, const string& suffix)
 {
 	string filename;
 	filename = path+String::UUID()+suffix;
 	while( File::FileExists( filename ))
 	{
-		filename = path+String::UUID()+suffix;
+		filename = path;
+		filename += String::UUID();
+		filename += suffix;
 	}
 	return filename;
 }

@@ -8,13 +8,14 @@
 
 
 #include <functional>
+#include <memory>
 
 #include <libutils/Logger.h>
-
+#include <libutils/FileUtils.h>
 using namespace std::placeholders;
 
 
-OpiBackendApp::OpiBackendApp():DaemonApplication(OPIB_APP_NAME,"/var/run", "root", "root")
+OpiBackendApp::OpiBackendApp():DaemonApplication(OPIB_APP_NAME,"/run", "root", "root")
 {
 
 }
@@ -46,9 +47,9 @@ void OpiBackendApp::Main()
 		logg.SetLevel(Logger::Debug);
 	}
 
-	this->server = OpiBackendServerPtr( new OpiBackendServer( SOCKPATH) );
+	this->server = std::make_shared<OpiBackendServer>( SOCKPATH );
 
-	chmod( SOCKPATH, 0666);
+	chmod( SOCKPATH, File::UserRW | File::GroupRW | File::OtherRW);
 
 	this->server->Run();
 
@@ -60,23 +61,20 @@ void OpiBackendApp::ShutDown()
 	logg << Logger::Debug << "Shutting down"<<lend;
 }
 
-OpiBackendApp::~OpiBackendApp()
-{
+OpiBackendApp::~OpiBackendApp() = default;
 
-}
-
-void OpiBackendApp::SigTerm(int signo)
+void OpiBackendApp::SigTerm(int)
 {
 	logg << Logger::Info << "Got sigterm initiate shutdown"<<lend;
 	this->server->ShutDown();
 }
 
-void OpiBackendApp::SigHup(int signo)
+void OpiBackendApp::SigHup(int)
 {
 
 }
 
-void OpiBackendApp::SigPipe(int signo)
+void OpiBackendApp::SigPipe(int)
 {
 	logg << Logger::Info << "Got SIGPIPE, ignoring"<<lend;
 }
