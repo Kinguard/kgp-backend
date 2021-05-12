@@ -2505,34 +2505,30 @@ void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json
 	this->SendOK(client, cmd, ret);
 }
 
+#include <libopi/DiskHelper.h>
+
 void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	ScopedLog l("Do System Get Storage");
 	Json::Value ret;
-	string ExecOutput, storagescript;
-	vector<string> storage;
-	
-	int retval = 0;
-	
-	// prints only the line with the data partition and in the order of "total, used, available" in 1k blocks
 
-	storagescript ="df -l | grep \""+String::Trimmed(SysConfig().GetKeyAsString("filesystem","storagemount"),"/")+R"(" | awk '{print $2 " " $3 " " $4}')";
-	tie(retval,ExecOutput)=Process::Exec( storagescript );
-	if ( retval )
+	try
 	{
-		String::Split(ExecOutput,storage," ");
+		Json::Value st = OPI::DiskHelper::StatFs(SysConfig().GetKeyAsString("filesystem","storagemount"));
 
-        ret["storage"]["total"]=storage[0];
-		ret["storage"]["used"]=storage[1];
-		ret["storage"]["available"]=storage[2];
-		
+		uint64_t fragsize = st["fragment_size"].asUInt();
+		uint64_t sizefree = (fragsize * st["blocks_free"].asUInt64()) / 1024;
+		uint64_t sizetotal = (fragsize * st["blocks_total"].asUInt64()) / 1024;
+		ret["storage"]["total"]= Json::UInt64(sizetotal);
+		ret["storage"]["available"]=Json::UInt64(sizefree);
+		ret["storage"]["used"]=Json::UInt64(sizetotal-sizefree);
+
 		this->SendOK(client, cmd, ret);
 	}
-	else
+	catch (std::runtime_error& err)
 	{
 		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error");
 	}
-		
 }
 
 //TODO: Refactor

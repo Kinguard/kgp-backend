@@ -37,7 +37,6 @@ include_directories (
 		${LIBKINGUARD_INCLUDE_DIRS}
 	)
 
-add_definitions( -std=c++11 )
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 
 target_link_libraries( ${PROJECT_NAME} applib -ljsoncpp ${LIBOPI_LDFLAGS} ${LIBNOTIFY_LDFLAGS} ${LIBKINGUARD_LDFLAGS} -lkgpnotify)
