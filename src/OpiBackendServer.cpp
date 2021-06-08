@@ -2544,19 +2544,25 @@ void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	scope = "hostinfo";
-	key = "unitid";
-	ret[key] = this->getSysconfigString(scope,key);
+	ret["unitid"] = this->getSysconfigString("hostinfo","unitid");
+	ret["unitidbak"] = this->getSysconfigString("hostinfo","unitidbak");
 
-	key = "unitidbak";
-	ret[key] = this->getSysconfigString(scope,key);
+	string provider = this->getSysconfigString( "dns","provider");
+	if( provider == "none")
+	{
+		// Ugly workaround to make Module providers work if on clean KGP system
+		provider = "OpenProducts";
+	}
 
-	scope = "dns";
-	key = "provider";
-	ret[key] = this->getSysconfigString(scope,key);
-	key = "enabled";
-	ret[key] = this->getSysconfigBool(scope,key);
+	ret["provider"] = provider;
+	ret["enabled"] = this->getSysconfigBool( "dns","enabled");
 
+/* Todo, generalize provider concept and use below instead of above.
+ * There is a started but unused API getModulesProviders in webfrontend
+	SystemManager& sysmgr = SystemManager::Instance();
+
+	ret["providers"] = JsonHelper::ToJsonArray(sysmgr.Providers());
+*/
 	this->SendOK(client, cmd, ret);
 
 }
