@@ -991,13 +991,43 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 
 }
 
-// TODO: Refactor and modularize, opi/s3 specifics
+static Json::Value getAWSRegions()
+{
+	Json::Value regions(Json::objectValue);
+	regions["us-east-1"			]="US East (Ohio)           ";
+	regions["us-east-2"			]="US East (N. Virginia)    ";
+	regions["us-west-1"			]="US West (N. California)  ";
+	regions["us-west-2"			]="US West (Oregon)         ";
+	regions["af-south-1"		]="Africa (Cape Town)       ";
+	regions["ap-east-1"			]="Asia Pacific (Hong Kong) ";
+	regions["ap-south-1"		]="Asia Pacific (Mumbai)    ";
+	regions["ap-northeast-3"	]="Asia Pacific (Osaka)     ";
+	regions["ap-northeast-2"	]="Asia Pacific (Seoul)     ";
+	regions["ap-southeast-1"	]="Asia Pacific (Singapore) ";
+	regions["ap-southeast-2"	]="Asia Pacific (Sydney)    ";
+	regions["ap-northeast-1"	]="Asia Pacific (Tokyo)     ";
+	regions["ca-central-1"		]="Canada (Central)         ";
+	regions["cn-north-1"		]="China (Beijing)          ";
+	regions["cn-northwest-1"	]="China (Ningxia)          ";
+	regions["eu-central-1"		]="Europe (Frankfurt)       ";
+	regions["eu-west-1"			]="Europe (Ireland)         ";
+	regions["eu-west-2"			]="Europe (London)          ";
+	regions["eu-south-1"		]="Europe (Milan)           ";
+	regions["eu-west-3"			]="Europe (Paris)           ";
+	regions["eu-north-1"		]="Europe (Stockholm)       ";
+	regions["me-south-1"		]="Middle East (Bahrain)    ";
+	regions["sa-east-1"			]="South America (São Paulo)";
+
+	return regions;
+}
+
+// TODO: Refactor and modularize, opi/s3 specifics, move core to libkinguard
 void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
 	string backend,key;
 	bool enabled = false;
-    string type, bucket;
+	string type, bucket, region;
     SysConfig sysconfig;
 
 	ScopedLog l("Get backup settings");
@@ -1019,7 +1049,11 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
         {
             bucket = sysconfig.GetKeyAsString("backup","bucket");
         }
-    }
+		if ( sysconfig.HasKey("backup","region") )
+		{
+			bucket = sysconfig.GetKeyAsString("backup","region");
+		}
+	}
     catch (std::runtime_error& e)
     {
 		this->SendErrorMessage( client, cmd, Status::InternalServerError, "Failed to read config parameters");
@@ -1043,7 +1077,8 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 
 	res["type"] = type;
     res["AWSbucket"] = bucket;
-
+	res["AWSregion"] = region;
+	res["AWSregions"] = getAWSRegions();
 
     IniFile aws(BACKUP_AUTH,":");
     aws.UseSection("s3");
@@ -1063,6 +1098,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 	string AWSkey = cmd["AWSkey"].asString();
 	string AWSseckey = cmd["AWSseckey"].asString();
 	string AWSbucket = cmd["AWSbucket"].asString();
+	string AWSregion = cmd["AWSregion"].asString();
     SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
@@ -1091,6 +1127,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
                 Process::Exec( BACKUP_UMOUNT_FS);
             }
             sysconfig.PutKey("backup","bucket", AWSbucket);
+			sysconfig.PutKey("backup","region", AWSregion);
 
             IniFile aws(BACKUP_AUTH,":");
             aws.UseSection("s3");
