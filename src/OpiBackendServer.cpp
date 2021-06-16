@@ -1051,7 +1051,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
         }
 		if ( sysconfig.HasKey("backup","region") )
 		{
-			bucket = sysconfig.GetKeyAsString("backup","region");
+			region = sysconfig.GetKeyAsString("backup","region");
 		}
 	}
     catch (std::runtime_error& e)
