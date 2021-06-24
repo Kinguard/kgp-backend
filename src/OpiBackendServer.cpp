@@ -1087,7 +1087,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     this->SendOK(client, cmd, res);
 }
 
-// TODO: Refactor and modularize, opi/s3 specifics
+// TODO: Refactor and modularize, opi/s3 specifics, move core to libkinguard
 void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
 	Json::Value res(Json::objectValue);
@@ -2283,7 +2283,13 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	{
 		return;
 	}
-    string netif = sysinfo.NetworkDevice();
+	string netif = OPI::SysInfo().NetworkDevice();
+	if( netif == "" )
+	{
+		logg << Logger::Error << "Missing default network interface!" << lend;
+		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Unable to find default network interface");
+		return;
+	}
 
 	NetworkManager& nm = NetworkManager::Instance();
 
@@ -2311,6 +2317,7 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	}
 	else
 	{
+		logg << Logger::Error << "Unknown addressing of interface: '" << netif <<"'" << lend;
 		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Unknown addressing of network interface");
 		return;
 	}
