@@ -1087,6 +1087,7 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
     this->SendOK(client, cmd, res);
 }
 
+
 // TODO: Refactor and modularize, opi/s3 specifics, move core to libkinguard
 void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
 {
@@ -1160,8 +1161,15 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
     this->SendOK(client, cmd);
 	if(backend == "remote" || backend == "local" || backend == "amazon")
 	{
-		Process::Exec( BACKUP_MOUNT_FS);
-		Process::Exec( BACKUP_LINK);
+
+		static Utils::Thread::Function mountandlink = []()
+		{
+			Process::Exec( BACKUP_MOUNT_FS);
+			Process::Exec( BACKUP_LINK);
+		};
+
+		logg << Logger::Debug << "Start detached mount and link of backup" << lend;
+		Utils::Thread::Async( &mountandlink );
 	}
 
 }
