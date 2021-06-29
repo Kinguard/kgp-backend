@@ -3,14 +3,12 @@
 PKGFILE=/etc/opi/packageinfo.conf
 OUT=/var/lib/kinguard/packagestatus.json
 
-# export LOGLEVEL=8
-. $1/utils.sh
+LOGNAME="${LOGNAME}: Pkgstatus"
+source /usr/share/kgp-bashlibrary/scripts/kgp-logging.sh
 
 log_debug "Update package info, start"
 
-
 # indent or not
-
 #NL="\n"
 #TB="\t"
 
