@@ -2132,7 +2132,9 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	if (certtype == "CUSTOMCERT")
 	{
 
-		logg << Logger::Debug << "Supplied key: '" << key << "'" << lend;
+		logg << Logger::Debug << "Validating custom certificate" << lend;
+
+		//TODO: Really should verify that key is used in cert
 		bool valid_cert = this->verifyCertificate(certificate,"cert");
 		bool valid_key =  this->verifyCertificate(key,"key");
 
@@ -2735,6 +2737,9 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 			return;
 		}
 
+		// Get a OP signed certificate
+		logg << Logger::Debug << "Request OP signed certificate" << lend;
+		idmgr.CreateCertificate(true, "LETSENCRYPT");
 	}
 	else
 	{
