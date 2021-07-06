@@ -1561,6 +1561,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 		ret["type"] = "EXTERNAL";
 		ret["send"] = conf.send;
 		ret["receive"] = conf.receive;
+
 		break;
 	}
 	case SmtpConfig::Custom:
@@ -1573,6 +1574,28 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 		ret["port"] =		conf.port;
 		break;
 	}
+	}
+
+	// Indicate if it is possible to use relay for send/receive
+	// This is a bit hackish and requires deeper knowledge
+	// on the dns-functionality of OP services.
+	// Realy should be refactored out
+	ret["relaysend"] = false;
+	ret["relayreceive"] = false;
+
+	IdentityManager& mgr = IdentityManager::Instance();
+	if( mgr.HasDnsProvider() )
+	{
+		ret["relaysend"] = true;
+
+		list<string> domains = mgr.DnsAvailableDomains();
+		string domain = IdentityManager::Instance().GetDomain();
+
+		if( std::find(domains.begin(), domains.end(), domain) != domains.end() )
+		{
+			// Device uses a hosted domain that can handle receive email
+			ret["relayreceive"] = true;
+		}
 	}
 
 	this->SendOK(client, cmd,ret);
