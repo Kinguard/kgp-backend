@@ -2447,8 +2447,11 @@ void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 
+	SystemManager& sm = SystemManager::Instance();
+
 	Json::Value ret;
-	ret["enabled"] = File::FileExists("/usr/sbin/dropbear");
+	ret["available"] = sm.ShellAccessAvailable();
+	ret["enabled"] = sm.ShellAccessEnabled();
 
 	this->SendOK(client, cmd, ret);
 }
@@ -2462,8 +2465,7 @@ void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Va
 		return;
 	}
 
-	bool ret = false;
-	tie(ret, std::ignore) = Process::Exec("/usr/share/opi-backend/enable_shell.sh");
+	bool ret = SystemManager::Instance().ShellAccessEnable();
 
 	if( ! ret )
 	{
@@ -2483,9 +2485,7 @@ void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::V
 		return;
 	}
 
-
-	bool ret = false;
-	tie(ret, std::ignore) = Process::Exec( "/usr/share/opi-backend/disable_shell.sh" );
+	bool ret = SystemManager::Instance().ShellAccessDisable();
 
 	if( !ret )
 	{
