@@ -1,3 +1,100 @@
+opi-backend (1.15.3) vili; urgency=medium
+
+  * Buster release
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 07 Sep 2021 10:44:38 +0200
+
+opi-backend (1.15.3~test17) vili; urgency=medium
+
+  * Rework to use libkinguard/SystemManager for shell access
+
+ -- Tor Krill <tor@openproducts.se>  Fri, 06 Aug 2021 15:58:38 +0200
+
+opi-backend (1.15.3~test16) vili; urgency=medium
+
+  * Rebuild
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 04 Aug 2021 09:40:56 +0200
+
+opi-backend (1.15.3~test15) vili; urgency=medium
+
+  * Return indication if send/receive email via relay possible
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 06 Jul 2021 12:05:00 +0200
+
+opi-backend (1.15.3~test14) vili; urgency=medium
+
+  * Generate mail-cert when enable OP subscription to be able to send email
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 05 Jul 2021 14:58:29 +0200
+
+opi-backend (1.15.3~test13) vili; urgency=medium
+
+  * Update to use kgp-bashlibrary
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 29 Jun 2021 16:09:39 +0200
+
+opi-backend (1.15.3~test12) vili; urgency=medium
+
+  * Detach mount and link backup to not hang dispatch thread #643
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 28 Jun 2021 16:33:11 +0200
+
+opi-backend (1.15.3~test11) vili; urgency=medium
+
+  * Make sure Sysinfo is up2date with system status by acquire a new instance.
+    This to be sure we get correct network information. #639
+
+ -- Tor Krill <tor@openproducts.se>  Thu, 24 Jun 2021 21:59:23 +0200
+
+opi-backend (1.15.3~test10) vili; urgency=medium
+
+  * Fix typo in get backup settings
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 16 Jun 2021 10:47:15 +0200
+
+opi-backend (1.15.3~test9) vili; urgency=medium
+
+  * Initial ugly stab at supporting regions on AWS S3 backup
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 15 Jun 2021 17:22:14 +0200
+
+opi-backend (1.15.3~test8) vili; urgency=medium
+
+  * Workaround issue with providers
+
+ -- Tor Krill <tor@openproducts.se>  Tue, 08 Jun 2021 11:21:25 +0200
+
+opi-backend (1.15.3~test7) vili; urgency=medium
+
+  * Send provider list swith unit-id
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 07 Jun 2021 17:06:22 +0200
+
+opi-backend (1.15.3~test6) vili; urgency=medium
+
+  * Rebuild against latest libraries
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 26 May 2021 09:03:09 +0200
+
+opi-backend (1.15.3~test5) vili; urgency=medium
+
+  * Report storage in KB size instead of bytes
+
+ -- Tor Krill <tor@openproducts.se>  Wed, 12 May 2021 08:29:07 +0200
+
+opi-backend (1.15.3~test4) vili; urgency=medium
+
+  * Rework storage size calculation
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 10 May 2021 17:25:39 +0200
+
+opi-backend (1.15.3~test3) vili; urgency=medium
+
+  * Misc cleanups and linting
+
+ -- Tor Krill <tor@openproducts.se>  Mon, 10 May 2021 14:30:33 +0200
+
 opi-backend (1.15.3~test2) vili; urgency=medium
 
   * Allow regexp/wildcards in packagelist for packages in sw-version
