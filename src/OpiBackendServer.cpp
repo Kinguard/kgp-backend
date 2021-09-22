@@ -279,7 +279,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 
 			if( ! secop->PlainAuth(username, password)  )
 			{
-				this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
+				this->SendErrorMessage(client, cmd, Status::Unauthorized, "Failed");
 				return;
 			}
 
@@ -307,7 +307,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		SecopPtr secop(new Secop() );
 		if( ! secop->PlainAuth(username,password) )
 		{
-			this->SendErrorMessage(client, cmd, Status::BadRequest, "Failed");
+			this->SendErrorMessage(client, cmd, Status::Unauthorized, "Failed");
 			return;
 		}
 
