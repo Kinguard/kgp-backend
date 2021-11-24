@@ -54,7 +54,7 @@ public:
 
 	virtual ~Clients();
 private:
-	void ReapClient( WebClientPtr wc);
+	void ReapClient( const WebClientPtr& wc);
 	list<WebClientPtr> clients;
 };
 

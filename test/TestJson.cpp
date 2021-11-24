@@ -1,9 +1,11 @@
 #include "TestJson.h"
 
-#include <json/json.h>
+#include <nlohmann/json.hpp>
 #include <iostream>
 
 using namespace std;
+
+using json = nlohmann::json;
 
 CPPUNIT_TEST_SUITE_REGISTRATION ( TestJson );
 
@@ -33,29 +35,24 @@ void TestJson::tearDown()
 
 void TestJson::Test()
 {
-	Json::Value v, ret;
-	Json::Reader r;
+	json v, ret;
 
-	if( ! r.parse(jsstr, v) )
+	CPPUNIT_ASSERT_NO_THROW( v = json::parse(jsstr) );
+
+	CPPUNIT_ASSERT(v.contains("packages"));
+	CPPUNIT_ASSERT( v["packages"].is_object() );
+
+	for( const auto& member: v["packages"].items() )
 	{
-		std::cout << "Failed to parse json" << std::endl;
-		return;
-	}
+		json pkg = member.value();
+		cout << "pkg:" << pkg.dump(4) << endl;
 
-	CPPUNIT_ASSERT(v.isMember("packages"));
-	CPPUNIT_ASSERT( v["packages"].isObject() );
-
-	for( const auto& member: v["packages"].getMemberNames() )
-	{
-		Json::Value pkg = v["packages"][member];
-		cout << "pkg:" << pkg.toStyledString() << endl;
-
-		if(pkg["status"].asString() == "un" )
+		if(pkg["status"].get<string>() == "un" )
 		{
 			// Skip all uninstalled packages
 			continue;
 		}
-		ret["packages"][member] = pkg["version"].asString() + string(" (")+pkg["status"].asString()+string(")");
+		ret["packages"][member.key()] = pkg["version"].get<string>() + string(" (")+pkg["status"].get<string>()+string(")");
 
 	}
 

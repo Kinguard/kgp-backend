@@ -5,7 +5,6 @@
 #include <string>
 #include <map>
 
-#include <json/json.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -37,82 +36,82 @@ public:
 	virtual	~OpiBackendServer ();
 private:
 	// Commands
-	void DoLogin(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoAuthenticate(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoLogin(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoAuthenticate(UnixStreamClientSocketPtr& client, json& cmd);
 
-	void DoCreateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoDeleteUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoGetUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoGetUserIdentities(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoUserExists(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoUpdateUser(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoGetUsers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoGetUserGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoUpdateUserPassword(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoCreateUser(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoDeleteUser(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoGetUser(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoGetUserIdentities(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoUserExists(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoUpdateUser(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoGetUsers(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoGetUserGroups(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoUpdateUserPassword(UnixStreamClientSocketPtr& client, json& cmd);
 
-	void DoGetGroups(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoAddGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoAddGroupMember(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoGetGroupMembers(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoRemoveGroup(UnixStreamClientSocketPtr& client, Json::Value& cmd);
-	void DoRemoveGroupMember(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoGetGroups(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoAddGroup(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoAddGroupMember(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoGetGroupMembers(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoRemoveGroup(UnixStreamClientSocketPtr& client, json& cmd);
+	void DoRemoveGroupMember(UnixStreamClientSocketPtr& client, json& cmd);
 
-	void DoShutdown(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void DoShutdown(UnixStreamClientSocketPtr& client, json& cmd);
 
 	/*
 	 * Settings for automatic updates
 	 */
-	void DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoUpdateGetstate(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoUpdateSetstate(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoBackupStartBackup(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoBackupGetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoBackupSetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoBackupGetQuota(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoBackupGetStatus(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoBackupStartBackup(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpGetDomains(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpAddDomain(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpAddAddress(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpGetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSmtpSetSettings(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-    void DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkGetDomains(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkGetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkSetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkGetCert(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoNetworkCheckCert(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoShellGetSettings(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoShellEnable(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoShellDisable(UnixStreamClientSocketPtr &client, json &cmd);
 	
-	void DoSystemGetMessages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemAckMessage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-    void DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemGetMessages(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemAckMessage(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetStatus(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetStorage(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetPackages(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetType(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetUnitid(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemSetUnitid(UnixStreamClientSocketPtr &client, json &cmd);
 
-	void DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd);
-	void DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd);
+	void DoSystemStartUpdate(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, json &cmd);
+	void DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, json &cmd);
 
 
 	// Key management
@@ -121,11 +120,11 @@ private:
 
 
 	// Helper functions
-	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd);
-	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value& req);
+	bool CheckArguments(UnixStreamClientSocketPtr& client, int what,const json& cmd);
+	bool CheckLoggedIn(UnixStreamClientSocketPtr &client, json& req);
 
-	bool CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Value& req);
-	bool CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Json::Value& req);
+	bool CheckIsAdmin(UnixStreamClientSocketPtr &client, json& req);
+	bool CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, json& req);
 
 	bool isAdmin( const string& token);
 	bool isAdminOrUser( const string& token, const string& user);
@@ -145,15 +144,15 @@ private:
 	// ONLY call this when not processing a request!
 	void ReapClients();
 
-	Json::Value UserToJson(const KGP::UserPtr& user);
+	json UserToJson(const KGP::UserPtr& user);
 
-	void ProcessOneCommand(UnixStreamClientSocketPtr& client, Json::Value& cmd);
+	void ProcessOneCommand(UnixStreamClientSocketPtr& client, json& cmd);
 
-	void SendReply(UnixStreamClientSocketPtr& client, Json::Value& val);
-	void SendErrorMessage(UnixStreamClientSocketPtr& client, const Json::Value& cmd, int errcode, const string& msg);
-	void SendOK(UnixStreamClientSocketPtr& client, const Json::Value& cmd, const Json::Value& val = Json::nullValue);
+	void SendReply(UnixStreamClientSocketPtr& client, json& val);
+	void SendErrorMessage(UnixStreamClientSocketPtr& client, const json& cmd, int errcode, const string& msg);
+	void SendOK(UnixStreamClientSocketPtr& client, const json& cmd, const json& val = json());
 
-	typedef void (OpiBackendServer::*Action)(UnixStreamClientSocketPtr&, Json::Value&);
+	typedef void (OpiBackendServer::*Action)(UnixStreamClientSocketPtr&, json&);
 	map<string,Action> actions;
 
 	Clients clients;
@@ -162,9 +161,6 @@ private:
 	string typecheckerror;
 	static void typecheckcallback(const string& msg, void* data);
 	JsonHelper::TypeChecker typechecker;
-
-	Json::FastWriter writer;
-	Json::Reader reader;
 };
 
 typedef std::shared_ptr<OpiBackendServer> OpiBackendServerPtr;

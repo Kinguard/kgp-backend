@@ -1,5 +1,6 @@
 
 #include <algorithm>
+#include <utility>
 
 #include "WebClient.h"
 #include "Config.h"
@@ -71,7 +72,7 @@ WebClientPtr Clients::CreateNewClient(const string &username, SecopPtr secop)
 		return this->GetClientByUsername( username );
 	}
 
-	WebClientPtr client(new WebClient(username, secop) );
+	WebClientPtr client(new WebClient(username, std::move(secop)) );
 	this->clients.push_back(client);
 
 	return client;
@@ -94,7 +95,7 @@ bool Clients::IsTokenLoggedin(const string &token)
 				[token](const WebClientPtr& c) { return c->Token() == token; } ) != this->clients.end();
 }
 
-void Clients::ReapClient(WebClientPtr wc)
+void Clients::ReapClient(const WebClientPtr& wc)
 {
 	logg << Logger::Debug << "Reap " << wc->Username() << " token " << wc->Token() << lend;
 

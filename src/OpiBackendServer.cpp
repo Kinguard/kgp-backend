@@ -196,10 +196,12 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 			rd_total += rd;
 
 			logg << "Read request of socket (" <<rd << "/"<<rd_total << ") bytes"<<lend;
-			Json::Value req;
-			if( reader.parse(buf, buf+rd_total, req) )
+
+			try
 			{
-				if( req.isMember("cmd") && req["cmd"].isString() )
+				json req = json::parse(buf, buf+rd_total);
+
+				if( req.contains("cmd") && req["cmd"].is_string() )
 				{
 					this->ProcessOneCommand(sock, req);
 					retries = 5;
@@ -207,15 +209,17 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 				}
 				else
 				{
-					this->SendErrorMessage(sock, Json::Value::null, 4, "Missing command in request");
+					this->SendErrorMessage(sock, json(), 4, "Missing command in request");
 					break;
 				}
+
 			}
-			else
+			catch(json::parse_error& err)
 			{
+				logg << Logger::Notice << "Unable to parse request: " << err.what() << lend;
 				if( retries-- == 0 )
 				{
-					this->SendErrorMessage(sock, Json::Value::null, 4, "Unable to parse request");
+					this->SendErrorMessage(sock, json(), 4, "Unable to parse request");
 					break;
 				}
 			}
@@ -244,7 +248,7 @@ void OpiBackendServer::Dispatch(SocketPtr con)
 
 OpiBackendServer::~OpiBackendServer() = default;
 
-void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("DoLogin");
 
@@ -259,8 +263,8 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		return;
 	}
 
-	string username = cmd["username"].asString();
-	string password = cmd["password"].asString();
+	string username = cmd["username"].get<string>();
+	string password = cmd["password"].get<string>();
 
 	if( this->clients.IsUsernameLoggedin( username ))
 	{
@@ -284,7 +288,7 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 			}
 
 			// User reauthorized?? Return same token
-			Json::Value ret;
+			json ret;
 			ret["token"] = wc->Token();
 
 			this->SendOK(client, cmd, ret);
@@ -314,14 +318,14 @@ void OpiBackendServer::DoLogin(UnixStreamClientSocketPtr &client, Json::Value &c
 		// we have a new login
 		WebClientPtr wc = this->clients.CreateNewClient( username, secop );
 
-		Json::Value ret;
+		json ret;
 		ret["token"] = wc->Token();
 
 		this->SendOK(client, cmd, ret);
 	}
 }
 
-void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do Authenticate");
 
@@ -332,8 +336,8 @@ void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::V
 		return;
 	}
 
-	string username = cmd["username"].asString();
-	string password = cmd["password"].asString();
+	string username = cmd["username"].get<string>();
+	string password = cmd["password"].get<string>();
 
 	// We do this on a new temporary connection
 	SecopPtr secop(new Secop() );
@@ -346,7 +350,7 @@ void OpiBackendServer::DoAuthenticate(UnixStreamClientSocketPtr &client, Json::V
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do Create user");
 
@@ -360,10 +364,10 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	string token =		cmd["token"].asString();
-	string user =		cmd["username"].asString();
-	string pass =		cmd["password"].asString();
-	string display =	cmd["displayname"].asString();
+	string token =		cmd["token"].get<string>();
+	string user =		cmd["username"].get<string>();
+	string pass =		cmd["password"].get<string>();
+	string display =	cmd["displayname"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken(token)->Secop();
 
@@ -379,7 +383,7 @@ void OpiBackendServer::DoCreateUser(UnixStreamClientSocketPtr &client, Json::Val
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do Delete user");
     SysConfig sysconfig;
@@ -394,8 +398,8 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	string token =		cmd["token"].asString();
-	string user =		cmd["username"].asString();
+	string token =		cmd["token"].get<string>();
+	string user =		cmd["username"].get<string>();
 
 	WebClientPtr wc = this->clients.GetClientByToken( token );
 
@@ -418,7 +422,7 @@ void OpiBackendServer::DoDeleteUser(UnixStreamClientSocketPtr &client, Json::Val
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get user");
 
@@ -432,8 +436,8 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 		return;
 	}
 
-	string token =		cmd["token"].asString();
-	string user =		cmd["username"].asString();
+	string token =		cmd["token"].get<string>();
+	string user =		cmd["username"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
@@ -448,12 +452,12 @@ void OpiBackendServer::DoGetUser(UnixStreamClientSocketPtr &client, Json::Value 
 		return;
 	}
 
-	Json::Value ret = this->UserToJson(usr);
+	json ret = this->UserToJson(usr);
 
 	this->SendOK(client, cmd,ret);
 }
 
-void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get user identities");
 
@@ -472,7 +476,7 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	string user = cmd["username"].asString();
+	string user = cmd["username"].get<string>();
 
 	// TODO: Validate that user exists!
 
@@ -481,10 +485,10 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 	// Get all remote addresses
 	list<map<string,string>> accounts = mmgr.GetRemoteAccounts(user);
 
-	Json::Value ids(Json::arrayValue);
+	json ids=json::array();
 	for( auto& account: accounts )
 	{
-		ids.append(account["email"]);
+		ids.push_back(account["email"]);
 	}
 
 	// Get all smtp addresses
@@ -496,18 +500,18 @@ void OpiBackendServer::DoGetUserIdentities(UnixStreamClientSocketPtr &client, Js
 		{
 			if( user == get<1>(address) )
 			{
-				ids.append(get<0>(address)+"@"+domain);
+				ids.push_back(get<0>(address)+"@"+domain);
 			}
 		}
 	}
 
-	Json::Value ret;
+	json ret;
 	ret["identities"] = ids;
 
 	this->SendOK(client, cmd,ret);
 }
 
-void OpiBackendServer::DoUserExists(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUserExists(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do user exists");
 
@@ -516,20 +520,20 @@ void OpiBackendServer::DoUserExists(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	string user =		cmd["username"].asString();
+	string user =		cmd["username"].get<string>();
 
 	UserManagerPtr umgr = UserManager::Instance();
 
 	bool exists = umgr->UserExists( user );
 
-	Json::Value ret;
+	json ret;
 	ret["username"] = user;
 	ret["exists"] = exists;
 
 	this->SendOK(client, cmd,ret);
 }
 
-void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do update user");
 
@@ -548,10 +552,10 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 		return;
 	}
 
-	string token =			cmd["token"].asString();
-	string user =			cmd["username"].asString();
-	string disp =			cmd["displayname"].asString();
-	string defaultemail =	cmd["defaultemail"].asString();
+	string token =			cmd["token"].get<string>();
+	string user =			cmd["username"].get<string>();
+	string disp =			cmd["displayname"].get<string>();
+	string defaultemail =	cmd["defaultemail"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
@@ -579,7 +583,7 @@ void OpiBackendServer::DoUpdateUser(UnixStreamClientSocketPtr &client, Json::Val
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get users");
 
@@ -588,7 +592,7 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-	string token = cmd["token"].asString();
+	string token = cmd["token"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
@@ -596,17 +600,17 @@ void OpiBackendServer::DoGetUsers(UnixStreamClientSocketPtr &client, Json::Value
 
 	list<UserPtr> users = umgr->GetUsers();
 
-	Json::Value ret;
-	ret["users"]=Json::arrayValue;
+	json ret;
+	ret["users"]=json::array();
 	for(const auto& user: users)
 	{
-		ret["users"].append( this->UserToJson( user ) );
+		ret["users"].push_back( this->UserToJson( user ) );
 	}
 
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get user groups");
 
@@ -620,8 +624,8 @@ void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::
 		return;
 	}
 
-	string user =		cmd["username"].asString();
-	string token =		cmd["token"].asString();
+	string user =		cmd["username"].get<string>();
+	string token =		cmd["token"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 
@@ -629,17 +633,17 @@ void OpiBackendServer::DoGetUserGroups(UnixStreamClientSocketPtr &client, Json::
 
 	list<string> groups = umgr->GetUserGroups( user );
 
-	Json::Value ret;
-	ret["groups"]=Json::arrayValue;
+	json ret;
+	ret["groups"]=json::array();
 	for(const auto& group: groups)
 	{
-		ret["groups"].append( group );
+		ret["groups"].push_back( group );
 	}
 
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do update password");
 
@@ -658,10 +662,10 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 		return;
 	}
 
-	string token =		cmd["token"].asString();
-	string user =		cmd["username"].asString();
-	string passw =		cmd["password"].asString();
-	string newps =		cmd["newpassword"].asString();
+	string token =		cmd["token"].get<string>();
+	string user =		cmd["username"].get<string>();
+	string passw =		cmd["password"].get<string>();
+	string newps =		cmd["newpassword"].get<string>();
 
 	WebClientPtr wc = this->clients.GetClientByToken( token );
 
@@ -679,7 +683,7 @@ void OpiBackendServer::DoUpdateUserPassword(UnixStreamClientSocketPtr &client, J
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get groups");
 
@@ -687,17 +691,17 @@ void OpiBackendServer::DoGetGroups(UnixStreamClientSocketPtr &client, Json::Valu
 
 	list<string> groups = umgr->GetGroups();
 
-	Json::Value ret;
-	ret["groups"]=Json::arrayValue;
+	json ret;
+	ret["groups"]= json::array();
 	for(const auto& group: groups)
 	{
-		ret["groups"].append( group );
+		ret["groups"].push_back( group );
 	}
 
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do add group");
 
@@ -711,8 +715,8 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-	string token =	cmd["token"].asString();
-	string group =	cmd["group"].asString();
+	string token =	cmd["token"].get<string>();
+	string group =	cmd["group"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 	UserManagerPtr umgr = UserManager::Instance(secop);
@@ -728,7 +732,7 @@ void OpiBackendServer::DoAddGroup(UnixStreamClientSocketPtr &client, Json::Value
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do add group member");
 
@@ -742,9 +746,9 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 		return;
 	}
 
-	string token =	cmd["token"].asString();
-	string group =	cmd["group"].asString();
-	string member =	cmd["member"].asString();
+	string token =	cmd["token"].get<string>();
+	string group =	cmd["group"].get<string>();
+	string member =	cmd["member"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 	UserManagerPtr umgr = UserManager::Instance(secop);
@@ -778,7 +782,7 @@ void OpiBackendServer::DoAddGroupMember(UnixStreamClientSocketPtr &client, Json:
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do get group members");
 
@@ -792,26 +796,26 @@ void OpiBackendServer::DoGetGroupMembers(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	string token =	cmd["token"].asString();
-	string group =	cmd["group"].asString();
+	string token =	cmd["token"].get<string>();
+	string group =	cmd["group"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 	UserManagerPtr umgr = UserManager::Instance(secop);
 
 	list<string> members = umgr->GetGroupMembers( group );
 
-	Json::Value ret;
-	ret["members"]=Json::arrayValue;
+	json ret;
+	ret["members"]= json::array();
 
 	for( const auto& member: members)
 	{
-		ret["members"].append(member);
+		ret["members"].push_back(member);
 	}
 
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do remove group");
 
@@ -825,8 +829,8 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 		return;
 	}
 
-	string token =	cmd["token"].asString();
-	string group =	cmd["group"].asString();
+	string token =	cmd["token"].get<string>();
+	string group =	cmd["group"].get<string>();
 
 	SecopPtr secop = this->clients.GetClientByToken( token )->Secop();
 	UserManagerPtr umgr = UserManager::Instance(secop);
@@ -841,7 +845,7 @@ void OpiBackendServer::DoRemoveGroup(UnixStreamClientSocketPtr &client, Json::Va
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do group remove member");
 
@@ -855,9 +859,9 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	string token =	cmd["token"].asString();
-	string group =	cmd["group"].asString();
-	string member =	cmd["member"].asString();
+	string token =	cmd["token"].get<string>();
+	string group =	cmd["group"].get<string>();
+	string member =	cmd["member"].get<string>();
 
 	WebClientPtr wc = this->clients.GetClientByToken( token );
 
@@ -898,7 +902,7 @@ void OpiBackendServer::DoRemoveGroupMember(UnixStreamClientSocketPtr &client, Js
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do shutdown");
 
@@ -907,7 +911,7 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 		return;
 	}
 
-	string action =	cmd["action"].asString();
+	string action =	cmd["action"].get<string>();
 
 	if( action == "shutdown" || action == "reboot" )
 	{
@@ -931,9 +935,9 @@ void OpiBackendServer::DoShutdown(UnixStreamClientSocketPtr &client, Json::Value
 	}
 }
 
-void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, json &cmd)
 {
-	Json::Value res(Json::objectValue);
+	json res;
 
 	ScopedLog l("Get update state");
     SysConfig sysconfig;
@@ -957,19 +961,16 @@ void OpiBackendServer::DoUpdateGetstate(UnixStreamClientSocketPtr &client, Json:
 
 }
 
-void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, json &cmd)
 {
-	Json::Value res(Json::objectValue);
-
 	ScopedLog l("Set update state");
-	string doupdates = cmd["state"].asString();
+	string doupdates = cmd["state"].get<string>();
     SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
 		return;
 	}
-
 
     try
     {
@@ -991,9 +992,9 @@ void OpiBackendServer::DoUpdateSetstate(UnixStreamClientSocketPtr &client, Json:
 
 }
 
-static Json::Value getAWSRegions()
+static json getAWSRegions()
 {
-	Json::Value regions(Json::objectValue);
+	json regions;
 	regions["us-east-1"			]="US East (Ohio)           ";
 	regions["us-east-2"			]="US East (N. Virginia)    ";
 	regions["us-west-1"			]="US West (N. California)  ";
@@ -1022,9 +1023,9 @@ static Json::Value getAWSRegions()
 }
 
 // TODO: Refactor and modularize, opi/s3 specifics, move core to libkinguard
-void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
-	Json::Value res(Json::objectValue);
+	json res;
 	string backend,key;
 	bool enabled = false;
 	string type, bucket, region;
@@ -1089,17 +1090,15 @@ void OpiBackendServer::DoBackupGetSettings(UnixStreamClientSocketPtr &client, Js
 
 
 // TODO: Refactor and modularize, opi/s3 specifics, move core to libkinguard
-void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
-	Json::Value res(Json::objectValue);
-
 	ScopedLog l("Set backup settings");
-	string type = cmd["type"].asString();
-	string backend = cmd["location"].asString();
-	string AWSkey = cmd["AWSkey"].asString();
-	string AWSseckey = cmd["AWSseckey"].asString();
-	string AWSbucket = cmd["AWSbucket"].asString();
-	string AWSregion = cmd["AWSregion"].asString();
+	string type = cmd["type"].get<string>();
+	string backend = cmd["location"].get<string>();
+	string AWSkey = cmd["AWSkey"].get<string>();
+	string AWSseckey = cmd["AWSseckey"].get<string>();
+	string AWSbucket = cmd["AWSbucket"].get<string>();
+	string AWSregion = cmd["AWSregion"].get<string>();
     SysConfig sysconfig(true);
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
@@ -1174,7 +1173,7 @@ void OpiBackendServer::DoBackupSetSettings(UnixStreamClientSocketPtr &client, Js
 
 }
 
-void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Get Quota");
 
@@ -1184,24 +1183,23 @@ void OpiBackendServer::DoBackupGetQuota(UnixStreamClientSocketPtr &client, Json:
 	}
 
 	string jsonMessage;
-	Json::Reader reader;
-	Json::Value parsedFromString;
+	json parsedFromString;
 
 	tie(ignore,jsonMessage) = Process::Exec( BACKUP_GET_QUOTA );
 
-	bool parsingSuccessful = reader.parse(jsonMessage, parsedFromString);
-
-	if( parsingSuccessful )
+	try
 	{
+		parsedFromString = json::parse(jsonMessage);
 		this->SendOK(client, cmd, parsedFromString);
 	}
-	else
+	catch(json::parse_error& err)
 	{
+		logg << Logger::Notice << "Read quota failed: " << err.what() << lend;
 		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Read quota failed");
 	}
 }
 
-void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Get Backup Status");
 
@@ -1210,7 +1208,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	Json::Value res(Json::objectValue);
+	json res;
 	struct stat filestatus = {};
 	string log;
 
@@ -1253,7 +1251,7 @@ void OpiBackendServer::DoBackupGetStatus(UnixStreamClientSocketPtr &client, Json
 
 }
 
-void OpiBackendServer::DoBackupStartBackup(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoBackupStartBackup(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do backup start backup");
 
@@ -1274,7 +1272,7 @@ void OpiBackendServer::DoBackupStartBackup(UnixStreamClientSocketPtr &client, Js
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp get domains");
 
@@ -1287,17 +1285,17 @@ void OpiBackendServer::DoSmtpGetDomains(UnixStreamClientSocketPtr &client, Json:
 
 	list<string> domains = mmgr.GetDomains();
 
-	Json::Value res(Json::objectValue);
-	res["domains"]=Json::arrayValue;
+	json res;
+	res["domains"]= json::array();
 	for( const auto& domain: domains )
 	{
-		res["domains"].append(domain);
+		res["domains"].push_back(domain);
 	}
 
 	this->SendOK(client, cmd, res);
 }
 
-void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp add domain");
 
@@ -1311,7 +1309,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 		return;
 	}
 
-	string domain = cmd["domain"].asString();
+	string domain = cmd["domain"].get<string>();
 
 	MailManager& mmgr = MailManager::Instance();
 	mmgr.AddDomain( domain );
@@ -1326,7 +1324,7 @@ void OpiBackendServer::DoSmtpAddDomain(UnixStreamClientSocketPtr &client, Json::
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp delete domain");
 
@@ -1340,9 +1338,9 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 
-	string domain = cmd["domain"].asString();
+	string domain = cmd["domain"].get<string>();
 
-	string token = cmd["token"].asString();
+	string token = cmd["token"].get<string>();
 	bool admin = this->isAdmin( token );
 
 	string user = this->clients.GetClientByToken( token )->Username();
@@ -1380,7 +1378,7 @@ void OpiBackendServer::DoSmtpDeleteDomain(UnixStreamClientSocketPtr &client, Jso
 	}
 }
 
-void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp get addresses");
 
@@ -1394,9 +1392,9 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 
-	string domain = cmd["domain"].asString();
+	string domain = cmd["domain"].get<string>();
 
-	string token = cmd["token"].asString();
+	string token = cmd["token"].get<string>();
 	bool admin = this->isAdmin( token );
 	string user = this->clients.GetClientByToken( token )->Username();
 
@@ -1404,8 +1402,8 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 
 	list<tuple<string,string>> addresses = mmgr.GetAddresses(domain);
 
-	Json::Value res(Json::objectValue);
-	res["addresses"]=Json::arrayValue;
+	json res;
+	res["addresses"]= json::array();
 	for( auto address: addresses )
 	{
 		// Only return own adresses if not admin
@@ -1414,16 +1412,16 @@ void OpiBackendServer::DoSmtpGetAddresses(UnixStreamClientSocketPtr &client, Jso
 			continue;
 		}
 
-		Json::Value adr;
+		json adr;
 		adr["address"] = get<0>(address);
 		adr["username"] = get<1>(address);
-		res["addresses"].append(adr);
+		res["addresses"].push_back(adr);
 	}
 
 	this->SendOK(client, cmd, res);
 }
 
-void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp add address");
 
@@ -1437,11 +1435,11 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 		return;
 	}
 
-	string domain = cmd["domain"].asString();
-	string username = cmd["username"].asString();
-	string address = cmd["address"].asString();
+	string domain = cmd["domain"].get<string>();
+	string username = cmd["username"].get<string>();
+	string address = cmd["address"].get<string>();
 
-	string token = cmd["token"].asString();
+	string token = cmd["token"].get<string>();
 	bool admin = this->isAdmin( token );
 	string user = this->clients.GetClientByToken( token )->Username();
 
@@ -1484,7 +1482,7 @@ void OpiBackendServer::DoSmtpAddAddress(UnixStreamClientSocketPtr &client, Json:
 	}
 }
 
-void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp delete address");
 
@@ -1498,12 +1496,12 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	string token = cmd["token"].asString();
+	string token = cmd["token"].get<string>();
 	bool admin = this->isAdmin( token );
 	string user = this->clients.GetClientByToken( token )->Username();
 
-	string domain = cmd["domain"].asString();
-	string address = cmd["address"].asString();
+	string domain = cmd["domain"].get<string>();
+	string address = cmd["address"].get<string>();
 
 	MailManager& mmgr = MailManager::Instance();
 
@@ -1537,7 +1535,7 @@ void OpiBackendServer::DoSmtpDeleteAddress(UnixStreamClientSocketPtr &client, Js
 }
 
 //TODO: Refactor this out, OPI specifics
-void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp get settings");
 
@@ -1549,7 +1547,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
     string saslpasswd = SysConfig().GetKeyAsString("filesystem","storagemount") + "/" + SysConfig().GetKeyAsString("mail","saslpasswd");
     SmtpConfig cfg(saslpasswd);
 
-	Json::Value ret;
+	json ret;
 	switch( cfg.GetMode() )
 	{
 	case SmtpConfig::OPI:
@@ -1602,7 +1600,7 @@ void OpiBackendServer::DoSmtpGetSettings(UnixStreamClientSocketPtr &client, Json
 }
 
 //TODO: Refactor this out, OPI specifics
-void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do smtp set settings");
     SysConfig sysconfig;
@@ -1616,7 +1614,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		return;
 	}
 
-	string type = cmd["type"].asString();
+	string type = cmd["type"].get<string>();
     string saslpwd = sysconfig.GetKeyAsString("filesystem","storagemount") + "/" + sysconfig.GetKeyAsString("mail","saslpasswd");
 
 	if( type == "OPI")
@@ -1636,8 +1634,8 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
         SmtpConfig smtp( saslpwd );
 		OPRelayConf conf;
 
-		conf.receive = cmd["receive"].asBool();
-		conf.send = cmd["send"].asBool();
+		conf.receive = cmd["receive"].get<bool>();
+		conf.send = cmd["send"].get<bool>();
 
 		smtp.SetOPRelayMode( conf );
 	}
@@ -1650,10 +1648,10 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 		}
 
 		OPCustomConf conf;
-		conf.user = cmd["username"].asString();
-		conf.pass = cmd["password"].asString();
-		conf.host = cmd["hostname"].asString();
-		conf.port = cmd["port"].asString();
+		conf.user = cmd["username"].get<string>();
+		conf.pass = cmd["password"].get<string>();
+		conf.host = cmd["hostname"].get<string>();
+		conf.port = cmd["port"].get<string>();
 
 		if( conf.host == "" )
 		{
@@ -1685,7 +1683,7 @@ void OpiBackendServer::DoSmtpSetSettings(UnixStreamClientSocketPtr &client, Json
 	}
 }
 
-void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do fetchmail get accounts");
 
@@ -1696,34 +1694,34 @@ void OpiBackendServer::DoFetchmailGetAccounts(UnixStreamClientSocketPtr &client,
 
 	// Username is optional here
 	string user;
-	if(cmd.isMember( "username" ) && cmd["username"].isString())
+	if(cmd.contains( "username" ) && cmd["username"].is_string())
 	{
-		user = cmd["username"].asString();
+		user = cmd["username"].get<string>();
 	}
 
 	MailManager& mmgr = MailManager::Instance();
 
 	list<map<string,string>> accounts = mmgr.GetRemoteAccounts(user);
 
-	Json::Value ret(Json::objectValue);
-	ret["accounts"] = Json::arrayValue;
+	json ret;
+	ret["accounts"] = json::array();
 
 	for( auto& account: accounts )
 	{
-		Json::Value acc(Json::objectValue);
+		json acc;
 		acc["email"] = account["email"];
 		acc["host"] = account["host"];
 		acc["identity"] = account["identity"];
 		acc["username"] = account["username"];
 		acc["ssl"] = account["ssl"];
-		ret["accounts"].append(acc);
+		ret["accounts"].push_back(acc);
 	}
 
 	this->SendOK(client, cmd,ret);
 
 }
 
-void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do fetchmail get account");
 
@@ -1737,20 +1735,20 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 		return;
 	}
 
-	string host = cmd["hostname"].asString();
-	string id = cmd["identity"].asString();
+	string host = cmd["hostname"].get<string>();
+	string id = cmd["identity"].get<string>();
 
 	MailManager& mmgr = MailManager::Instance();
 	map<string,string> account = mmgr.GetRemoteAccount(host,id);
 
-	Json::Value ret(Json::objectValue);
+	json ret;
 	ret["email"] = account["email"];
 	ret["host"] = account["host"];
 	ret["identity"] = account["identity"];
 	ret["username"] = account["username"];
 	ret["ssl"] = account["ssl"];
 
-	if( this->isAdminOrUser(cmd["token"].asString(), account["username"]) )
+	if( this->isAdminOrUser(cmd["token"].get<string>(), account["username"]) )
 	{
 		this->SendOK(client, cmd,ret);
 	}
@@ -1760,7 +1758,7 @@ void OpiBackendServer::DoFetchmailGetAccount(UnixStreamClientSocketPtr &client, 
 	}
 }
 
-void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do fetchmail add account");
 
@@ -1774,14 +1772,14 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 		return;
 	}
 
-	string email = cmd["email"].asString();
-	string host = cmd["hostname"].asString();
-	string id = cmd["identity"].asString();
-	string pwd = cmd["password"].asString();
-	string user = cmd["username"].asString();
-	string ssl = cmd["ssl"].asString();
+	string email = cmd["email"].get<string>();
+	string host = cmd["hostname"].get<string>();
+	string id = cmd["identity"].get<string>();
+	string pwd = cmd["password"].get<string>();
+	string user = cmd["username"].get<string>();
+	string ssl = cmd["ssl"].get<string>();
 
-	if( ! this->isAdminOrUser(cmd["token"].asString(), user) )
+	if( ! this->isAdminOrUser(cmd["token"].get<string>(), user) )
 	{
 		this->SendErrorMessage(client, cmd, Status::Unauthorized, "Not allowed");
 		return;
@@ -1802,7 +1800,7 @@ void OpiBackendServer::DoFetchmailAddAccount(UnixStreamClientSocketPtr &client, 
 	}
 }
 
-void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do fetchmail update account");
 
@@ -1819,15 +1817,15 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	string email = cmd["email"].asString();
-	string ohost = cmd["orighostname"].asString();
-	string host = cmd["hostname"].asString();
-	string oid = cmd["origidentity"].asString();
-	string id = cmd["identity"].asString();
-	string pwd = cmd["password"].asString();
-	string user = cmd["username"].asString();
-	string token = cmd["token"].asString();
-	string ssl = cmd["ssl"].asString();
+	string email = cmd["email"].get<string>();
+	string ohost = cmd["orighostname"].get<string>();
+	string host = cmd["hostname"].get<string>();
+	string oid = cmd["origidentity"].get<string>();
+	string id = cmd["identity"].get<string>();
+	string pwd = cmd["password"].get<string>();
+	string user = cmd["username"].get<string>();
+	string token = cmd["token"].get<string>();
+	string ssl = cmd["ssl"].get<string>();
 
 	if( ! this->isAdminOrUser( token, user) )
 	{
@@ -1869,7 +1867,7 @@ void OpiBackendServer::DoFetchmailUpdateAccount(UnixStreamClientSocketPtr &clien
 	}
 }
 
-void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do fetchmail delete account");
 
@@ -1883,9 +1881,9 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 		return;
 	}
 
-	string host = cmd["hostname"].asString();
-	string id = cmd["identity"].asString();
-	string token = cmd["token"].asString();
+	string host = cmd["hostname"].get<string>();
+	string id = cmd["identity"].get<string>();
+	string token = cmd["token"].get<string>();
 
 	MailManager& mmgr = MailManager::Instance();
 
@@ -1910,8 +1908,8 @@ void OpiBackendServer::DoFetchmailDeleteAccount(UnixStreamClientSocketPtr &clien
 	}
 }
 
-void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
-	Json::Value res(Json::objectValue);
+void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client, json &cmd) {
+	json res;
 
 	ScopedLog l("Get port state");
     SysConfig sysconfig;
@@ -1920,7 +1918,7 @@ void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client,
 	{
 		return;
 	}
-    string port = cmd["port"].asString();
+	string port = cmd["port"].get<string>();
     string forwardports;
 
     try
@@ -1946,14 +1944,14 @@ void OpiBackendServer::DoNetworkGetPortStatus(UnixStreamClientSocketPtr &client,
     this->SendOK(client, cmd, res);
 }
 
-void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
-	Json::Value res(Json::objectValue);
+void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client, json &cmd) {
+	json res;
 
 	ScopedLog l("Set port state");
     SysConfig sysconfig(true);
 
 
-    string port = cmd["port"].asString();
+	string port = cmd["port"].get<string>();
     string forwardports;
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
@@ -1975,7 +1973,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     i = find(ports.begin(), ports.end(), port);
     if (i != ports.end()) {
         // found port in config
-        if (! cmd["set_open"].asBool())
+		if (! cmd["set_open"].get<bool>())
         {
             // remove port
             logg << Logger::Debug << "Remove port" << port << lend;
@@ -1985,7 +1983,7 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     else
     {
         // port is not in config
-        if (cmd["set_open"].asBool())
+		if (cmd["set_open"].get<bool>())
         {
             // add port
             logg << Logger::Debug << "Add port" << port << lend;
@@ -2017,8 +2015,8 @@ void OpiBackendServer::DoNetworkSetPortStatus(UnixStreamClientSocketPtr &client,
     this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
-	Json::Value res(Json::objectValue);
+void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, json &cmd) {
+	json res;
 
     ScopedLog l("Get OPI name!");
     SysConfig sysconfig;
@@ -2046,11 +2044,11 @@ void OpiBackendServer::DoNetworkGetOpiName(UnixStreamClientSocketPtr &client, Js
 	}
 }
 
-void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, json &cmd)
 {
 
 	ScopedLog l("Set OPI name");
-	Json::Value response(Json::objectValue);
+	json response;
 	KGP::IdentityManager& idmgr = KGP::IdentityManager::Instance();
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
@@ -2068,12 +2066,12 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 	string oldopiname = idmgr.GetHostname();
 	string olddomain = idmgr.GetDomain();
 
-	string hostname = cmd["hostname"].asString();
-	string domain = cmd["domain"].asString();
-	bool   enableDns = cmd["dnsenabled"].asBool();
-	string certtype = cmd["CertType"].asString();
-	string certificate = cmd["CustomCertVal"].asString();
-	string key = cmd["CustomKeyVal"].asString();
+	string hostname = cmd["hostname"].get<string>();
+	string domain = cmd["domain"].get<string>();
+	bool   enableDns = cmd["dnsenabled"].get<bool>();
+	string certtype = cmd["CertType"].get<string>();
+	string certificate = cmd["CustomCertVal"].get<string>();
+	string key = cmd["CustomKeyVal"].get<string>();
 
 	if (SCFG.HasKey("webcertificate","backend"))
 	{
@@ -2206,7 +2204,7 @@ void OpiBackendServer::DoNetworkSetOpiName(UnixStreamClientSocketPtr &client, Js
 
 }
 
-void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, json &cmd) {
 
     ScopedLog l("Get Domains!");
 	KGP::IdentityManager& idmgr = KGP::IdentityManager::Instance();
@@ -2216,23 +2214,23 @@ void OpiBackendServer::DoNetworkGetDomains(UnixStreamClientSocketPtr &client, Js
         return;
     }
 
-	Json::Value res(Json::objectValue);
-	Json::Value d(Json::arrayValue);
+	json res;
+	json d = json::array();
 	list<string> domains = idmgr.DnsAvailableDomains();
 
 	for(const auto& val: domains)
 	{
-		d.append(val);
+		d.push_back(val);
 	}
 	res["availabledomains"] = d;
 
 	this->SendOK(client, cmd, res);
 }
 
-void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Get Webserver Certificates");
-	Json::Value cfg;
+	json cfg;
 
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin( client, cmd ) )
 	{
@@ -2289,11 +2287,11 @@ void OpiBackendServer::DoNetworkGetCert(UnixStreamClientSocketPtr &client, Json:
 	this->SendOK( client, cmd, cfg);
 }
 
-void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Json::Value &cmd) {
+void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, json &cmd) {
 	ScopedLog l("Check Webserver Certificates");
 
-	string type = cmd["type"].asString();
-	string certificate = cmd["CertVal"].asString();
+	string type = cmd["type"].get<string>();
+	string certificate = cmd["CertVal"].get<string>();
 	
 	bool res = this->verifyCertificate(certificate,type);
 	if ( res )
@@ -2308,7 +2306,7 @@ void OpiBackendServer::DoNetworkCheckCert(UnixStreamClientSocketPtr &client, Jso
 }
 
 
-void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Get network settings");
 
@@ -2326,17 +2324,17 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 
 	NetworkManager& nm = NetworkManager::Instance();
 
-	Json::Value cfg = nm.GetConfiguration( netif );
-	Json::Value ret;
-	if( cfg["addressing"].asString() == "static" )
+	json cfg = nm.GetConfiguration( netif );
+	json ret;
+	if( cfg["addressing"].get<string>() == "static" )
 	{
 		ret["type"] = "static";
-		ret["ipnumber"] = cfg["options"]["address"][static_cast<uint>(0)].asString();
-		ret["netmask"] = cfg["options"]["netmask"][static_cast<uint>(0)].asString();
-		ret["gateway"] = cfg["options"]["gateway"][static_cast<uint>(0)].asString();
+		ret["ipnumber"] = cfg["options"]["address"][static_cast<uint>(0)].get<string>();
+		ret["netmask"] = cfg["options"]["netmask"][static_cast<uint>(0)].get<string>();
+		ret["gateway"] = cfg["options"]["gateway"][static_cast<uint>(0)].get<string>();
 		ret["dns"] = cfg["options"]["dns"];
 	}
-	else if( cfg["addressing"].asString() == "dhcp" )
+	else if( cfg["addressing"].get<string>() == "dhcp" )
 	{
 		ret["type"] = "dhcp";
         ret["ipnumber"] = NetUtils::GetAddress( netif );
@@ -2358,7 +2356,7 @@ void OpiBackendServer::DoNetworkGetSettings(UnixStreamClientSocketPtr &client, J
 	this->SendOK( client, cmd, ret);
 }
 
-void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Set network settings");
 
@@ -2368,13 +2366,13 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	}
 
 	// Manually verify
-	if( !cmd.isMember("type") && !cmd["type"].isString() )
+	if( !cmd.contains("type") && !cmd["type"].is_string() )
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 
-	string type = cmd["type"].asString();
+	string type = cmd["type"].get<string>();
 	if( type != "dhcp" && type != "static")
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
@@ -2402,31 +2400,31 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 	}
 	else
 	{
-		if( !cmd.isMember("ipnumber") && !cmd["ipnumber"].isString() )
+		if( !cmd.contains("ipnumber") && !cmd["ipnumber"].is_string() )
 		{
 			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
-		if( !cmd.isMember("netmask") && !cmd["netmask"].isString() )
+		if( !cmd.contains("netmask") && !cmd["netmask"].is_string() )
 		{
 			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
-		if( !cmd.isMember("gateway") && !cmd["gateway"].isString() )
+		if( !cmd.contains("gateway") && !cmd["gateway"].is_string() )
 		{
 			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
-		if( !cmd.isMember("dns") && !cmd["dns"].isArray() )
+		if( !cmd.contains("dns") && !cmd["dns"].is_array() )
 		{
 			this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 			return;
 		}
 
 		res = nm.StaticConfiguration( netif,
-								cmd["ipnumber"].asString(),
-								cmd["netmask"].asString(),
-								cmd["gateway"].asString(),
+								cmd["ipnumber"].get<string>(),
+								cmd["netmask"].get<string>(),
+								cmd["gateway"].get<string>(),
 								JsonHelper::FromJsonArray(cmd["dns"])
 								);
 	}
@@ -2438,7 +2436,7 @@ void OpiBackendServer::DoNetworkSetSettings(UnixStreamClientSocketPtr &client, J
 
 }
 
-void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do shell get settings");
 
@@ -2449,14 +2447,14 @@ void OpiBackendServer::DoShellGetSettings(UnixStreamClientSocketPtr &client, Jso
 
 	SystemManager& sm = SystemManager::Instance();
 
-	Json::Value ret;
+	json ret;
 	ret["available"] = sm.ShellAccessAvailable();
 	ret["enabled"] = sm.ShellAccessEnabled();
 
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do shell enabled");
 
@@ -2476,7 +2474,7 @@ void OpiBackendServer::DoShellEnable(UnixStreamClientSocketPtr &client, Json::Va
 	this->SendOK(client, cmd);
 }
 
-void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do shell disabled");
 
@@ -2497,7 +2495,7 @@ void OpiBackendServer::DoShellDisable(UnixStreamClientSocketPtr &client, Json::V
 }
 
 
-void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Get Messages");
 	if( ! this->CheckLoggedIn(client,cmd)  )
@@ -2505,7 +2503,7 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	Json::Value messages(Json::arrayValue);
+	json messages = json::array();
 	// return array of json encoded messages
 
 	// for each file in /var/spool/notify
@@ -2515,7 +2513,7 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 		{
             if( File::FileExists(file) )
             {
-                messages.append(File::GetContentAsString(file, true));
+				messages.push_back(File::GetContentAsString(file, true));
             }
 		}
 	}
@@ -2525,15 +2523,15 @@ void OpiBackendServer::DoSystemGetMessages(UnixStreamClientSocketPtr &client, Js
 		this->SendErrorMessage(client, cmd, Status::MethodNotAllowed, "Method not Allowed");
 		return;
 	}
-	Json::Value ret;
+	json ret;
 	ret["messages"] = messages;
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, json &cmd)
 {
     ScopedLog l("Do System Ack Message");
-	Json::Value ret;
+	json ret;
 	
 	if( ! this->CheckLoggedIn(client,cmd) || !this->CheckIsAdmin(client, cmd) )
 	{
@@ -2541,23 +2539,23 @@ void OpiBackendServer::DoSystemAckMessage(UnixStreamClientSocketPtr &client, Jso
 		return;
 	}
 	// Manually verify
-	if( !cmd.isMember("id") && !cmd["id"].isString() )
+	if( !cmd.contains("id") && !cmd["id"].is_string() )
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
-	logg << Logger::Debug << "Ack message with id: " << cmd["id"].asString() <<lend;
-    Notify::ExistingMessage msg(cmd["id"].asString());
+	logg << Logger::Debug << "Ack message with id: " << cmd["id"].get<string>() <<lend;
+	Notify::ExistingMessage msg(cmd["id"].get<string>());
     msg.Ack();
 
 	ret["deleted"] = cmd["id"];
 	this->SendOK(client, cmd, ret);
 }
 
-void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Get Status");
-	Json::Value ret;
+	json ret;
 	string Message, uptimescript, tempscript;
 	int retval = 0;
 
@@ -2584,21 +2582,21 @@ void OpiBackendServer::DoSystemGetStatus(UnixStreamClientSocketPtr &client, Json
 
 #include <libopi/DiskHelper.h>
 
-void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Get Storage");
-	Json::Value ret;
+	json ret;
 
 	try
 	{
-		Json::Value st = OPI::DiskHelper::StatFs(SysConfig().GetKeyAsString("filesystem","storagemount"));
+		json st = OPI::DiskHelper::StatFs(SysConfig().GetKeyAsString("filesystem","storagemount"));
 
-		uint64_t fragsize = st["fragment_size"].asUInt();
-		uint64_t sizefree = (fragsize * st["blocks_free"].asUInt64()) / 1024;
-		uint64_t sizetotal = (fragsize * st["blocks_total"].asUInt64()) / 1024;
-		ret["storage"]["total"]= Json::UInt64(sizetotal);
-		ret["storage"]["available"]=Json::UInt64(sizefree);
-		ret["storage"]["used"]=Json::UInt64(sizetotal-sizefree);
+		uint64_t fragsize = st["fragment_size"];
+		uint64_t sizefree = (fragsize * st["blocks_free"].get<uint64_t>()) / 1024;
+		uint64_t sizetotal = (fragsize * st["blocks_total"].get<uint64_t>()) / 1024;
+		ret["storage"]["total"]= sizetotal;
+		ret["storage"]["available"]= sizefree;
+		ret["storage"]["used"]= sizetotal-sizefree;
 
 		this->SendOK(client, cmd, ret);
 	}
@@ -2609,10 +2607,10 @@ void OpiBackendServer::DoSystemGetStorage(UnixStreamClientSocketPtr &client, Jso
 }
 
 //TODO: Refactor
-void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Get Unitid");
-	Json::Value ret;
+	json ret;
 	string scope;
 	string key;
 
@@ -2645,10 +2643,10 @@ void OpiBackendServer::DoSystemGetUnitid(UnixStreamClientSocketPtr &client, Json
 }
 
 //TODO: Refactor
-void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Set Unitid");
-	Json::Value ret;
+	json ret;
 
 	string passphrase;
 	bool passphrasefound = false;
@@ -2659,25 +2657,25 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 	}
 
 	// Manually verify passed parameters
-	if( !cmd.isMember("unitid") && !cmd["unitid"].isString() )
+	if( !cmd.contains("unitid") && !cmd["unitid"].is_string() )
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
-	if( !cmd.isMember("mpwd") && !cmd["mpwd"].isString() )
+	if( !cmd.contains("mpwd") && !cmd["mpwd"].is_string() )
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
-	if( !cmd.isMember("enabled") && !cmd["enabled"].isBool() )
+	if( !cmd.contains("enabled") && !cmd["enabled"].is_boolean() )
 	{
 		this->SendErrorMessage(client, cmd, Status::BadRequest, "Missing argument");
 		return;
 	}
 
-	string mpwd = cmd["mpwd"].asString();
-	string unitid = cmd["unitid"].asString();
-	bool enabled = cmd["enabled"].asBool();
+	string mpwd = cmd["mpwd"].get<string>();
+	string unitid = cmd["unitid"].get<string>();
+	bool enabled = cmd["enabled"].get<bool>();
 
 	// Read fs-passphrase from backup config.
 	string authfile = this->getSysconfigString("backup","authfile");
@@ -2796,7 +2794,7 @@ void OpiBackendServer::DoSystemSetUnitid(UnixStreamClientSocketPtr &client, Json
 }
 
 // Start a detached update
-void OpiBackendServer::DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemStartUpdate(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("DoSystemStartUpdate");
 
@@ -2811,7 +2809,7 @@ void OpiBackendServer::DoSystemStartUpdate(UnixStreamClientSocketPtr &client, Js
 }
 
 // Is there a system upgrade available
-void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("DoSystemGetUpgrade");
 
@@ -2825,7 +2823,7 @@ void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Jso
 
 	tie(upgradeavailable, description) = SystemManager::Instance().UpgradeAvailable();
 
-	Json::Value res(Json::objectValue);
+	json res;
 
 	res["available"] = upgradeavailable;
 	res["description"] = "";
@@ -2838,7 +2836,7 @@ void OpiBackendServer::DoSystemGetUpgrade(UnixStreamClientSocketPtr &client, Jso
 }
 
 // Initialize system upgrade
-void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("DoSystemStartUpgrade");
 
@@ -2856,15 +2854,15 @@ void OpiBackendServer::DoSystemStartUpgrade(UnixStreamClientSocketPtr &client, J
 }
 
 
-void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, json &cmd)
 {
     ScopedLog l("Do System Get Type");
-    Json::Value ret;
+	json ret;
 
 	size_t type=OPI::sysinfo.Type();
 	string typeText=OPI::sysinfo.SysTypeText[type];
 
-	ret["type"]=Json::Int(type);
+	ret["type"]=type;
     ret["typeText"]=typeText;
 
     try
@@ -2898,10 +2896,10 @@ void OpiBackendServer::DoSystemGetType(UnixStreamClientSocketPtr &client, Json::
 
 }
 
-void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, json &cmd)
 {
 	ScopedLog l("Do System Get Packages");
-	Json::Value ret, tmp;
+	json ret, tmp;
 
 	if( ! File::FileExists(PACKAGE_STATUSFILE) )
 	{
@@ -2920,14 +2918,18 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 		return;
 	}
 
-	if( !this->reader.parse(pkgstatus, tmp) )
+	try
 	{
-		logg << Logger::Error << "Failed to parse status file"  << lend;
+		tmp = json::parse(pkgstatus);
+	}
+	catch(json::parse_error& err)
+	{
+		logg << Logger::Error << "Failed to parse status file (" << err.what() << ")"  << lend;
 		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error (Failed to parse status file)");
 		return;
 	}
 
-	if( !tmp.isMember("packages") || ! tmp["packages"].isObject() )
+	if( !tmp.contains("packages") || ! tmp["packages"].is_object() )
 	{
 		logg << Logger::Error << "Malformed statusfile" << lend;
 		this->SendErrorMessage(client, cmd, Status::InternalServerError, "Internal Error (Malformed status file)");
@@ -2935,16 +2937,16 @@ void OpiBackendServer::DoSystemGetPackages(UnixStreamClientSocketPtr &client, Js
 	}
 
 
-	for( const auto& member: tmp["packages"].getMemberNames() )
+	for( const auto& member: tmp["packages"].items() )
 	{
-		Json::Value pkg = tmp["packages"][member];
+		json pkg = member.value();
 
-		if(pkg["status"].asString() == "un" )
+		if(pkg["status"].get<string>() == "un" )
 		{
 			// Skip all uninstalled packages
 			continue;
 		}
-		ret["packages"][member] = pkg["version"].asString() + string(" (")+pkg["status"].asString()+string(")");
+		ret["packages"][member.key()] = pkg["version"].get<string>() + string(" (")+pkg["status"].get<string>()+string(")");
 	}
 
 	this->SendOK(client, cmd, ret);
@@ -2996,15 +2998,15 @@ void OpiBackendServer::UnlockBackend()
 	this->islocked = false;
 }
 
-bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Value &req)
+bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, json &req)
 {
-	if( !req.isMember("token") && !req["token"].isString() )
+	if( !req.contains("token") && !req["token"].is_string() )
 	{
 		this->SendErrorMessage(client, req, Status::BadRequest, "Missing argument");
 		return false;
 	}
 
-	string token = req["token"].asString();
+	string token = req["token"].get<string>();
 
 	if( ! this->clients.IsTokenLoggedin( token ) )
 	{
@@ -3016,9 +3018,9 @@ bool OpiBackendServer::CheckLoggedIn(UnixStreamClientSocketPtr &client, Json::Va
 }
 
 // Assumes that check for logged in has been performed
-bool OpiBackendServer::CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Value &req)
+bool OpiBackendServer::CheckIsAdmin(UnixStreamClientSocketPtr &client, json &req)
 {
-	string token = req["token"].asString();
+	string token = req["token"].get<string>();
 
 	if( ! this->isAdmin( token ) )
 	{
@@ -3029,17 +3031,17 @@ bool OpiBackendServer::CheckIsAdmin(UnixStreamClientSocketPtr &client, Json::Val
 }
 
 // Assumes that check for logged in has been performed
-bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, Json::Value &req)
+bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, json &req)
 {
-	string token = req["token"].asString();
+	string token = req["token"].get<string>();
 
 	// If no username, check for admin only
-	if( ! req.isMember("username") )
+	if( ! req.contains("username") )
 	{
 		return this->CheckIsAdmin(client,req);
 	}
 
-	string user = req["username"].asString();
+	string user = req["username"].get<string>();
 
 	if( ! this->isAdminOrUser( token, user ) )
 	{
@@ -3073,11 +3075,11 @@ string OpiBackendServer::BackendLogin(const string &unit_id)
 	AuthServer s( unit_id);
 
 	int resultcode = 0;
-	Json::Value ret;
+	json ret;
 
 	tie(resultcode, ret) = s.Login();
 
-	return resultcode == Status::Ok ? ret["token"].asString() : "";
+	return resultcode == Status::Ok ? ret["token"].get<string>() : "";
 }
 
 void OpiBackendServer::ReapClients()
@@ -3096,10 +3098,10 @@ void OpiBackendServer::ReapClients()
 	this->lastreap = time(nullptr);
 }
 
-Json::Value OpiBackendServer::UserToJson(const UserPtr& user)
+json OpiBackendServer::UserToJson(const UserPtr& user)
 {
 
-	Json::Value ret;
+	json ret;
 	ret["username"] = user->GetUsername();
 	ret["id"] = user->GetUsername();
 	ret["displayname"] = user->GetDisplayname();
@@ -3118,9 +3120,9 @@ Json::Value OpiBackendServer::UserToJson(const UserPtr& user)
 	return ret;
 }
 
-void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, Json::Value &cmd)
+void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, json &cmd)
 {
-	string action = cmd["cmd"].asString();
+	string action = cmd["cmd"].get<string>();
 	if( this->actions.find(action) != this->actions.end() )
 	{
 		try
@@ -3141,36 +3143,36 @@ void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, Json
 
 }
 
-void OpiBackendServer::SendReply(UnixStreamClientSocketPtr &client, Json::Value &val)
+void OpiBackendServer::SendReply(UnixStreamClientSocketPtr &client, json &val)
 {
-	string r = this->writer.write(val);
+	string r = val.dump();
     //logg << Logger::Debug << "JSON REPLY "<< r <<lend;
 	client->Write(r.c_str(), r.length());
 }
 
-void OpiBackendServer::SendErrorMessage(UnixStreamClientSocketPtr &client, const Json::Value &cmd, int errcode, const string &msg)
+void OpiBackendServer::SendErrorMessage(UnixStreamClientSocketPtr &client, const json &cmd, int errcode, const string &msg)
 {
 	(void) cmd;
-	Json::Value ret(Json::objectValue);
+	json ret;
 	ret["status"]["value"]=errcode;
 	ret["status"]["desc"]=msg;
 	
 	this->SendReply(client, ret);
 }
 
-void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const Json::Value &cmd, const Json::Value &val)
+void OpiBackendServer::SendOK(UnixStreamClientSocketPtr &client, const json &cmd, const json &val)
 {
 	(void) cmd;
-	Json::Value ret(Json::objectValue);
+	json ret;
 	ret["status"]["value"]=0;
 	ret["status"]["desc"]="OK";
 
 	// Append any possible extra values to answer
-	if( ! val.isNull() )
+	if( ! val.is_null() )
 	{
-		for( const auto &x: val.getMemberNames() )
+		for( const auto &x: val.items() )
 		{
-			ret[x]=val[x];
+			ret[x.key()]=x.value();
 		}
 	}
 
@@ -3183,7 +3185,7 @@ void OpiBackendServer::typecheckcallback(const string& msg, void* data)
 	logg << Logger::Debug << "Typecheck failed: " << msg <<lend;
 }
 
-bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int what,const Json::Value& cmd)
+bool OpiBackendServer::CheckArguments(UnixStreamClientSocketPtr& client, int what,const json& cmd)
 {
 	if( ! this->typechecker.Verify(what, cmd) )
 	{
