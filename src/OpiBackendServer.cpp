@@ -3036,7 +3036,7 @@ bool OpiBackendServer::CheckIsAdminOrUser(UnixStreamClientSocketPtr &client, jso
 	string token = req["token"].get<string>();
 
 	// If no username, check for admin only
-	if( ! req.contains("username") )
+	if( ! req.contains("username")  || req["username"].is_null() )
 	{
 		return this->CheckIsAdmin(client,req);
 	}
