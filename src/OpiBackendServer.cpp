@@ -3145,7 +3145,7 @@ void OpiBackendServer::ProcessOneCommand(UnixStreamClientSocketPtr &client, json
 
 void OpiBackendServer::SendReply(UnixStreamClientSocketPtr &client, json &val)
 {
-	string r = val.dump();
+	string r = val.dump() + "\n";
     //logg << Logger::Debug << "JSON REPLY "<< r <<lend;
 	client->Write(r.c_str(), r.length());
 }
